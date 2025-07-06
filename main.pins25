@@ -1,0 +1,56 @@
+// globalne spremenljivke
+var greet   = "Hello, PINS'25"    
+var newline = '\n'                
+var arr     = 3*1,2*2,3           // array??
+//var negNum  = -100
+
+// rek funk za izr. fakultete
+fun factorial(n) =
+    if n == 0 then
+        1
+    else
+        n * factorial(n - 1)
+    end
+
+// func za pridobitev elementa iz tabele preko kazalca in offseta???
+fun get(arrPtr, idx) = ^(arrPtr + idx)
+
+// je sploh treba main?
+fun main() =
+    // lokalne var
+    var x    = 5,
+    var f    = factorial(x),   
+    var div  = f / 3,         
+    var mod  = f % 3,
+    var i    = 0,                       // <- so vejice na takih mestih pravilne??
+    var sum  = 0,                       //
+    
+    
+    while i < 6 do 
+        
+        sum = sum + ^(arr + i),
+        
+        // je ta postfiksna oblika pravilna??
+        (arr + i)^ = ^(arr + i) * 2,
+        i = i + 1
+    end,
+
+    // je to pravilna uporaba??
+    let
+        var localVal = sum,
+        fun inc(a)   = a + 1
+    in
+        localVal = inc(localVal)
+    end,
+
+    
+    var flag = !((f > 10) && (sum <= 60) || f == sum),
+
+    // no-op dodelitev
+    x = x
+end
+
+
+// kako je z vejicami na koncu vrstic (ali je potrebna/pravilna pri zadnjem statementu)
+
+// + kako se pravilno uporablja https://mdaines.github.io/grammophone/#/
