@@ -10,7 +10,7 @@ int main(const int argc, char* argv[]) {
     } else if (argc == 2) {
         in = fopen(argv[1], "r");
         if (!in) {
-            printf("Error opening file %s. Check spelling and/or location\n", argv[1]);
+            printf("Error opening file [%s]. Check spelling and/or location\n", argv[1]);
             exit(EXIT_FAILURE);
         }
     }

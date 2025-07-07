@@ -1,6 +1,11 @@
 // globalne spremenljivke
 var greet   = "Hello, PINS'25"    
-var newline = '\n'                
+var backslashn = "\n"
+var newline = '\n'                // valid char
+var hex = '\ff'                   // valid char
+var hex2 = '\fp'                  // invalid char   
+var char1 = 'a'                   // valid char
+        
 var arr     = 3*1,2*2,3           // array??
 //var negNum  = -100
 

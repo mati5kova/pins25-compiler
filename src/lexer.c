@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 #include "../include/lexer.h"
 
 #include <ctype.h>
@@ -15,9 +16,15 @@
 #define INITIAL_BUFFER_SIZE 500
 #define BUFFER_SIZE_INCREMENT 250
 
+#define MAX_IDENTIFIER_LENGTH 64
+
 uint32_t numberOfInputChars = 0;
 
 uint32_t tokenCount = 0;
+
+short int numberOfReservedKeywords = 10;
+char* reservedKeywords[] = {"fun", "var", "if", "then", "else", "while", "do", "let", "in", "end"};
+char* reservedKeywordsTokens[] = {"TOKEN_KEYWORD_FUN", "TOKEN_KEYWORD_VAR", "TOKEN_KEYWORD_IF", "TOKEN_KEYWORD_THEN", "TOKEN_KEYWORD_ELSE", "TOKEN_KEYWORD_WHILE", "TOKEN_KEYWORD_DO", "TOKEN_KEYWORD_LET", "TOKEN_KEYWORD_IN", "TOKEN_KEYWORD_END"};
 
 uint32_t skipUntilLineEnd(const char* src) {
     uint32_t counter = 0;
@@ -30,6 +37,11 @@ uint32_t skipUntilLineEnd(const char* src) {
 
 uint32_t retrieveTokenCount() {
     return tokenCount;
+}
+
+void incPosition(uint32_t* a, uint32_t* b) {
+    (*a)++;
+    (*b)++;
 }
 
 char* stringifyInputFile(FILE* inputFile) {
@@ -79,11 +91,12 @@ Token** tokenize(FILE* inputFile) {
 
     printf("Hello from lexer.c\n");
 
+    /*
     Token** tokens = malloc(INITIAL_TOKEN_COUNT * sizeof(Token*));
     if (!tokens) {
         printf("Out of memory [lexer.c tokenize]\n");
         exit(EXIT_FAILURE);
-    }
+    }*/
 
 
     char* source = stringifyInputFile(inputFile);
@@ -92,15 +105,14 @@ Token** tokenize(FILE* inputFile) {
         const char c = source[pos];
 
         if (c == ' ') {
-            pos++;
+            incPosition(&pos, &col);
             continue;
         }
 
         // handlamo novo vrstico
         if (c == '\n') {
-            ln++;
+            incPosition(&pos, &ln);
             col = 1;
-            pos++;
             printf("\n");
             continue;
         }
@@ -111,25 +123,171 @@ Token** tokenize(FILE* inputFile) {
             continue;
         }
 
-        // negativna števila
-        if (c == '-') {
-
-        }
-
         // cela števila
         if (isdigit(c)) {
+            bool isValidNumber = true;
+            const int digit = c - '0';
+            uint32_t number = 0;
 
+            if (digit == 0 && isdigit(source[pos + 1])) {
+                isValidNumber = false;
+                printf("[TOKEN_ERROR Invalid number. Numeric constants must start with a non zero digit ");
+            }
+
+            while (isdigit(source[pos]) && source[pos] != '\0' && source[pos] != '\n' && source[pos] != EOF) {
+                number = number * 10 + (source[pos] - '0');
+
+                incPosition(&pos, &col);
+            }
+
+            if (isValidNumber) {
+                printf("[TOKEN_CONSTANT_INT %d ", number);
+            }
+            continue;
         }
 
         // znak
         if (c == '\'') {
+            char character[4];
+            short int characterLength = 0;
+            incPosition(&pos, &col);
 
+            while (source[pos] != '\0' && source[pos] != '\'') {
+                if (characterLength == 4) {
+                    printf("[TOKEN_ERROR Invalid character. Character must start and end with [\'] while having length==1\n");
+                    free(source);
+                    exit(EXIT_FAILURE);
+                }
+
+                character[characterLength++] = source[pos];
+                incPosition(&pos, &col);
+            }
+            incPosition(&pos, &col);
+
+            character[characterLength] = '\0';
+
+            if (character[0] == '\\') {
+                if ((character[1] == 'n' || character[1] == '\\' || character[1] == '\'') && characterLength == 2) {
+                    // [\n]   [\']  [\\]
+                    printf("[TOKEN_CONSTANT_CHAR %s]\n", character);
+                } else if ((ishexnumber(character[1]) && ishexnumber(character[2])) && characterLength == 3){
+                    printf("[TOKEN_CONSTANT_CHAR %s]\n", character);
+                } else {
+                    printf("[TOKEN_ERROR Invalid character. Character must start and end with '\''\n");
+                }
+            } else if (characterLength == 1) {
+                if (isalpha(character[0])) {
+                    printf("[TOKEN_CONSTANT_CHAR %s]\n", character);
+                }
+            } else {
+                printf("[TOKEN_ERROR Invalid character. Character must start and end with '\''\n");
+            }
+            continue;
         }
 
-        // keywords in identifiers
-        if (isalpha(c)) {
+        // string constants
+        if (c == '"') {
+            char* strConst = malloc(INITIAL_BUFFER_SIZE * sizeof(char));
+            if (!strConst) {
+                printf("Out of memory [lexer.c tokenize]\n");
+                free(source);
+                exit(EXIT_FAILURE);
+            }
+            incPosition(&pos, &col);
+
+            int strConstLen = 0;
+            uint32_t currStrConstSize = INITIAL_BUFFER_SIZE;
+
+            bool firstChar = true;
+            while (!(source[pos] == '"' && !firstChar && source[pos - 1] != '\\')) {
+
+                if (strConstLen + 1 >= currStrConstSize) {
+                    char* temp = realloc(strConst, currStrConstSize + BUFFER_SIZE_INCREMENT);
+                    if (!temp) {
+                        free(strConst);
+                        printf("Failed to reallocate buffer\n");
+                        free(source);
+                        exit(EXIT_FAILURE);
+                    }
+                    strConst = temp;
+
+                    currStrConstSize += BUFFER_SIZE_INCREMENT;
+                }
+
+                strConst[strConstLen++] = source[pos];
+                incPosition(&pos, &col);
+                firstChar = false;
+            }
+            strConst[strConstLen] = '\0';
+            incPosition(&pos, &col);
+
+            printf("[TOKEN_CONSTANT_STRING %s ]", strConst);
+
+            free(strConst);
+            continue;
+        }
+
+        // keywords and identifiers
+        if (isalpha(c) || c == '_') {
+            char* keyIdentBuffer = malloc(MAX_IDENTIFIER_LENGTH * sizeof(char));
+            if (!keyIdentBuffer) {
+                printf("Out of memory [lexer.c tokenize]\n");
+                free(source);
+                exit(EXIT_FAILURE);
+            }
+
+            bool isKeyword = false;
+            int keyIdentLen = 0;
+
+            while (isalnum(source[pos]) && source[pos] != '\0' && source[pos] != '\n') {
+                keyIdentBuffer[keyIdentLen++] = source[pos];
 
 
+                incPosition(&pos, &col);
+            }
+            incPosition(&pos, &col);
+
+            keyIdentBuffer[keyIdentLen] = '\0';
+            TokenType tt = TOKEN_ERROR;
+
+            for (int i = 0; i < numberOfReservedKeywords; i++) {
+                if (strcmp(keyIdentBuffer, reservedKeywords[i]) == 0) {
+                    isKeyword = true;
+                }
+            }
+
+            if (isKeyword) {
+                if (strcmp(keyIdentBuffer, "fun") == 0) {
+                    tt = TOKEN_KEYWORD_FUN;
+                } else if (strcmp(keyIdentBuffer, "var") == 0) {
+                    tt = TOKEN_KEYWORD_VAR;
+                } else if (strcmp(keyIdentBuffer, "if") == 0) {
+                    tt = TOKEN_KEYWORD_IF;
+                } else if (strcmp(keyIdentBuffer, "then") == 0) {
+                    tt = TOKEN_KEYWORD_THEN;
+                } else if (strcmp(keyIdentBuffer, "else") == 0) {
+                    tt = TOKEN_KEYWORD_ELSE;
+                } else if (strcmp(keyIdentBuffer, "while") == 0) {
+                    tt = TOKEN_KEYWORD_WHILE;
+                } else if (strcmp(keyIdentBuffer, "do") == 0) {
+                    tt = TOKEN_KEYWORD_DO;
+                } else if (strcmp(keyIdentBuffer, "in") == 0) {
+                    tt = TOKEN_KEYWORD_IN;
+                } else if (strcmp(keyIdentBuffer, "end") == 0) {
+                    tt = TOKEN_KEYWORD_END;
+                }
+            }
+
+
+            if (isKeyword) {
+                printf("[%s %s]\n", reservedKeywordsTokens[tt - TOKEN_KEYWORD_FUN] , keyIdentBuffer);
+            } else {
+                printf("[TOKEN_IDENTIFIER %s]\n", keyIdentBuffer);
+            }
+
+
+            free(keyIdentBuffer);
+            continue;
         }
 
         if (c == '&') {
@@ -218,5 +376,5 @@ Token** tokenize(FILE* inputFile) {
     }
 
     free(source);
-    return tokens;
+    return NULL;
 }
