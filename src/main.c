@@ -1,33 +1,54 @@
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "../include/lexer.h"
+#include "../include/options.h"
 
 int main(const int argc, char* argv[]) {
+    FILE* in = NULL;
+    Options opts;
+    init_options(&opts);
 
-    FILE* in;
-    if (argc == 1) {
-        printf("Usage: %s [file to compile]\n", argv[0]);
-    } else if (argc == 2) {
-        in = fopen(argv[1], "r");
+    if (parse_args(argc, argv, &opts) < 0) {
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    if (opts.n_inputs == 0) {
+        fprintf(stderr, "Error: no file to compile\n");
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    if (opts.verbose) {
+        fprintf(stderr, "Verbose mode ON\n");
+    }
+
+    if (opts.n_inputs > 1) {
+        fprintf(stderr, "Error: too many files to compile\n");
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    if (opts.n_inputs == 1) {
+        in = fopen(opts.input_files[0], "r");
         if (!in) {
-            printf("Error opening file [%s]. Check spelling and/or location\n", argv[1]);
-            exit(EXIT_FAILURE);
+            printf("Error opening input file '%s'\n", opts.input_files[0]);
+            return EXIT_FAILURE;
         }
     }
 
-
-
     Token** tokens = tokenize(in);
+    const int numOfTokens = retrieveTokenCount();
 
-
+    if (opts.list_tokens_all) {
+        printTokens(tokens);
+    }
 
     // cleanup
     fclose(in);
-    for (int i = 0; i < retrieveTokenCount(); i++) {
-        free(tokens[i]);
-    }
-    free(tokens);
-
+    cleanupSourceBuffer();
+    cleanupTokens(numOfTokens, tokens);
 
     return EXIT_SUCCESS;
 }
