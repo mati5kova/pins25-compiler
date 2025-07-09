@@ -6,4 +6,8 @@ set(CMAKE_C_STANDARD 99)
 add_executable(pins25_compiler src/main.c
         include/lexer.h
         src/lexer.c
+        include/options.h
+        src/options.c
+        include/error_utils.h
+        src/error_utils.c
 )
