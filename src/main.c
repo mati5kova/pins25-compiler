@@ -38,10 +38,11 @@ int main(const int argc, char* argv[]) {
         }
     }
 
-    Token** tokens = tokenize(in);
+    Token** tokens = tokenize(in, &opts, opts.input_files[0]);
     const int numOfTokens = retrieveTokenCount();
+    const bool passedLexicalAnalysis = isLexicallyValid();
 
-    if (opts.list_tokens_all) {
+    if (opts.list_tokens_all && passedLexicalAnalysis) {
         printTokens(tokens);
     }
 

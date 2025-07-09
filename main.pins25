@@ -55,6 +55,8 @@ fun main() =
     x = x
 end
 
+var wrong = 012345
+
 
 // kako je z vejicami na koncu vrstic (ali je potrebna/pravilna pri zadnjem statementu)
 
