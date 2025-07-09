@@ -5,8 +5,10 @@
 #ifndef LEXER_H
 #define LEXER_H
 
-#include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
+
+#include "options.h"
 
 typedef enum {
     TOKEN_CONSTANT_INT,                        // 123
@@ -51,28 +53,41 @@ typedef enum {
     TOKEN_KEYWORD_IN,                          // in
     TOKEN_KEYWORD_END,                         // end
 
-    TOKEN_ERROR,                               // neveljaven znak, nedokon"an literal
+    TOKEN_ERROR,                               // neveljaven znak, nedokoncan literal, ...
 
-    TOKEN_EOF                                  // konec vhodne datoteke
+    TOKEN_EOF                                  // konec vhodne datoteke (ni v uporabi)
 } TokenType;
 
 typedef struct {
-    uint32_t ln;                               // vrstica
-    uint32_t col;                              // stolpec oz. znak v vrstici (1 index based)
-    uint32_t pos;                              // zaporedni byte v datoteki
+    int ln;                                    // vrstica
+    int col;                                   // stolpec oz. znak v vrstici (1 index based)
+    int pos;                                   // zaporedni byte v datoteki
 } InFileLocation;
 
 typedef struct {
-    TokenType      type;                       // tip tokena
-    const char     *start;                     // kazalec na zacetek lexema
-    size_t         length;                     // stevilo znakov v lexemu (dolzina)
-    InFileLocation location;                   // lokacija lexema v vhodni datoteki
+    TokenType       type;                      // tip tokena
+    char*           start;                     // kazalec na zacetek lexema
+    int             length;                    // stevilo znakov v lexemu (dolzina)
+    InFileLocation* location;                  // lokacija lexema v vhodni datoteki
 } Token;
 
-uint32_t retrieveTokenCount();
+// funkcija vrne stevilo tokenov ki so nastali v fazi lexikalne analize
+// uporablja se npr. za for-loop cleanup v main.c
+int retrieveTokenCount();
 
-char* stringifyInputFile(FILE* inputFile);
+// vrne ustrezno boolean vrednost glede na to, ali je bila lexikalna analiza uspesna
+bool isLexicallyValid();
 
-Token** tokenize(FILE* inputFile);
+// funkcija spremeni vsebino vhodne datoteke "inputFile" v zaporedje tokenov
+Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName);
+
+// funkcija izpise vse tokene v berljiv obliki
+void printTokens(Token** tokens);
+
+// funkcija sprosti pomnilnik ki ga zasede vsebina vhodne datoteke shranjena kot char*
+void cleanupSourceBuffer();
+
+// funkcija sprosti pomnilnik ki ga zasedejo ustvarjeni tokeni
+void cleanupTokens(int numOfTokens, Token** tokens);
 
 #endif //LEXER_H

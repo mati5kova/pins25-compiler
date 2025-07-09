@@ -1,33 +1,39 @@
 //
 // Created by Matevz on 03/07/2025.
 //
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
-#include "../include/lexer.h"
 
 #include <ctype.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-#define INITIAL_TOKEN_COUNT 100
-#define TOKEN_COUNT_INCREMENT 25
+#include "../include/error_utils.h"
+#include "../include/lexer.h"
 
-#define INITIAL_BUFFER_SIZE 500
-#define BUFFER_SIZE_INCREMENT 250
+#define INITIAL_TOKEN_COUNT 200       // zacetno stevilo tokenov
+#define TOKEN_COUNT_INCREMENT 100     // increment za stevilo tokenov
 
-#define MAX_IDENTIFIER_LENGTH 64
+#define INITIAL_BUFFER_SIZE 500       // zacetna velikost source bufferja
+#define BUFFER_SIZE_INCREMENT 250     // increment za source buffer
 
-uint32_t numberOfInputChars = 0;
+#define MAX_IDENTIFIER_LENGTH 64      // maksimalna dolzina za imena spremenljivk (63 znakov + \0)
 
-uint32_t tokenCount = 0;
+bool passedLexicalAnalysis = true;    // bool ali so bile v fazi lexikalne analize zaznane kaksne napake
 
-short int numberOfReservedKeywords = 10;
-char* reservedKeywords[] = {"fun", "var", "if", "then", "else", "while", "do", "let", "in", "end"};
-char* reservedKeywordsTokens[] = {"TOKEN_KEYWORD_FUN", "TOKEN_KEYWORD_VAR", "TOKEN_KEYWORD_IF", "TOKEN_KEYWORD_THEN", "TOKEN_KEYWORD_ELSE", "TOKEN_KEYWORD_WHILE", "TOKEN_KEYWORD_DO", "TOKEN_KEYWORD_LET", "TOKEN_KEYWORD_IN", "TOKEN_KEYWORD_END"};
+int numberOfInputChars = 0;           // stevilo znakov v vhodni datoteki da vemo do kam loop-amo v `tokenize`
 
-uint32_t skipUntilLineEnd(const char* src) {
-    uint32_t counter = 0;
+int tokenCount = 0;                   // stevilo tokenov v tabeli tokenov
+
+char* source;                         // kazalec na buffer z vsebino vhodne datoteke
+
+// stevilo rezerviranih besed jezika
+const short numberOfReservedKeywords = 10;
+const char* reservedKeywords[] = {"fun", "var", "if", "then", "else", "while", "do", "let", "in", "end"};
+
+// `skipUntilLineEnd` bere znake do konca vrstice in vrne stevilo prebranih znakov
+int skipUntilLineEnd(const char* src) {
+    int counter = 0;
     while (src[counter] != '\n' && src[counter] != '\0') {
         counter++;
     }
@@ -35,28 +41,44 @@ uint32_t skipUntilLineEnd(const char* src) {
     return counter;
 }
 
-uint32_t retrieveTokenCount() {
-    return tokenCount;
-}
+// `retrieveTokenCount` vrne stevilo tokenov ki jih je ustvaril lexikalni strol
+int retrieveTokenCount() { return tokenCount; }
 
-void incPosition(uint32_t* a, uint32_t* b) {
+// `isLexicallValid` vrne true ce ni bilo zaznane nobene lexikalne napake, drugace vrne false
+bool isLexicallyValid() { return passedLexicalAnalysis; }
+
+// helper funkcija `incPosition` poveca vrednosti vhodnih argumentov za +1
+// da ni potrebno vedno pisati: pos++; col++;
+void incPosition(int* a, int* b) {
     (*a)++;
     (*b)++;
 }
 
-char* stringifyInputFile(FILE* inputFile) {
+// `cleanupSourceBuffer` sprosti pomnilnik ki ga zavzame source buffer
+// pomembno je da se klice ob napaki in pa na koncu main funkcije, saj na source buffer kazejo kazalci znotraj posameznih Tokenov
+void cleanupSourceBuffer() {
+    free(source);
+}
 
+/*
+ * `stringifyInputFile` vrne kazalec na tabelo znakov
+ * lazje se premikamo po tabeli znakov kot pa po datoteki zato
+ * celotno vsebino vhodne datoteke shranimo v buffer ki ga nato uporabljamo
+ * kot source v `tokenize` funkciji
+ */
+char* stringifyInputFile(FILE* inputFile) {
     rewind(inputFile);
     numberOfInputChars = 0;
 
-    uint32_t currentMaxBufferSIze = INITIAL_BUFFER_SIZE;
+    // imamo zacetni buffer size ki ga po potrebi povecujemo
+    int currentMaxBufferSIze = INITIAL_BUFFER_SIZE;
     char* buffer = malloc(INITIAL_BUFFER_SIZE * sizeof(char));
     if (!buffer) {
         printf("Out of memory [lexer.c stringifyInputFile]\n");
         exit(EXIT_FAILURE);
     }
 
-    uint32_t c;
+    int c;
     while ((c = fgetc(inputFile)) != EOF) {
         if (c == '\r') {
             continue;
@@ -66,7 +88,7 @@ char* stringifyInputFile(FILE* inputFile) {
             char* temp = realloc(buffer, currentMaxBufferSIze + BUFFER_SIZE_INCREMENT);
             if (!temp) {
                 free(buffer);
-                printf("Failed to reallocate buffer\n");
+                printf("Failed to reallocate buffer [lexer.c stringifyInputFile]\n");
                 exit(EXIT_FAILURE);
             }
             buffer = temp;
@@ -84,129 +106,202 @@ char* stringifyInputFile(FILE* inputFile) {
     return buffer;
 }
 
-Token** tokenize(FILE* inputFile) {
-    uint32_t ln = 1;
-    uint32_t col = 1;
-    uint32_t pos = 0;
+/*
+ * glavna funkcija lexerja
+ * `tokenize` kot argument dobi vhodno datoteko ki jo nato poda funkciji `stringifyInputFile`
+ *
+ * `tokenize` kot rezultat vrne kazalec na prvi element tabele kazalcev na posamezne Token-e
+ */
+Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
+    int ln = 1;
+    int col = 1;
+    int pos = 0;
 
-    printf("Hello from lexer.c\n");
+    // stevilo tokenov ki jih trenutni token buffer lahko drzi, po potrebi se poveca
+    int maxNumberOfTokensInBuffer = INITIAL_TOKEN_COUNT;
 
-    /*
     Token** tokens = malloc(INITIAL_TOKEN_COUNT * sizeof(Token*));
     if (!tokens) {
         printf("Out of memory [lexer.c tokenize]\n");
         exit(EXIT_FAILURE);
-    }*/
+    }
 
+    // source je sedaj nasa tabela znakov napolnjena z vsebino vhodne datoteke
+    source = stringifyInputFile(inputFile);
 
-    char* source = stringifyInputFile(inputFile);
-
+    // glavni loop ki gre skozi vse znake source bufferja
     while (source[pos] != '\0' && pos < numberOfInputChars) {
+        if (tokenCount + 1 >= maxNumberOfTokensInBuffer) {
+            maxNumberOfTokensInBuffer += TOKEN_COUNT_INCREMENT;
+            Token** temp = realloc(tokens, maxNumberOfTokensInBuffer * sizeof(Token*));
+            if (!temp) {
+                fprintf(stderr, "Failed to reallocate tokens array\n");
+                cleanupSourceBuffer();
+                exit(EXIT_FAILURE);
+            }
+            tokens = temp;
+        }
+
         const char c = source[pos];
 
+        // ob presledkih se samo premaknemo naprej
         if (c == ' ') {
             incPosition(&pos, &col);
             continue;
         }
 
-        // handlamo novo vrstico
+        // ob novi vrstici povecamo ln in pos za +1 in nastavimo col na zacetek (=1)
         if (c == '\n') {
             incPosition(&pos, &ln);
             col = 1;
-            printf("\n");
             continue;
         }
 
-        // preverimo za komentar
+        // ce sta trenutni in naslednji znak enaka `/` klicemo `skipUntilLineEnd` in rezultat pristejemo poziciji
         if (c == '/' && source[pos + 1] == '/') {
             pos += skipUntilLineEnd(&(source[pos]));
             continue;
         }
 
-        // cela števila
+        // ustvarimo nov Token
+        Token* newToken = malloc(sizeof(Token));
+        if (!newToken) {
+            printf("Out of memory [lexer.c tokenize]\n");
+            cleanupSourceBuffer();
+            exit(EXIT_FAILURE);
+        }
+        newToken->start = &(source[pos]); // zacetek lexema je trenutni znak
+        newToken->location = malloc(sizeof(InFileLocation));
+        if (!(newToken->location)) {
+            printf("Out of memory [lexer.c tokenize]\n");
+            cleanupSourceBuffer();
+            free(newToken);
+            exit(EXIT_FAILURE);
+        }
+        newToken->location->col = col;
+        newToken->location->ln = ln;
+        newToken->location->pos = pos;
+
+        // cela stevila
         if (isdigit(c)) {
             bool isValidNumber = true;
-            const int digit = c - '0';
-            uint32_t number = 0;
+            const int firstDigit = c - '0';
 
-            if (digit == 0 && isdigit(source[pos + 1])) {
+            // dejanska vrednost celostevilske konstante ki jo beremo
+            int number = 0;
+
+            // stevilo stevk v stevilu
+            int lexemLength = 0;
+
+            if (firstDigit == 0 && isdigit(source[pos + 1])) {
                 isValidNumber = false;
-                printf("[TOKEN_ERROR Invalid number. Numeric constants must start with a non zero digit ");
+                newToken->type = TOKEN_ERROR;
             }
 
+            // beremo dokler so stevke
             while (isdigit(source[pos]) && source[pos] != '\0' && source[pos] != '\n' && source[pos] != EOF) {
                 number = number * 10 + (source[pos] - '0');
-
+                lexemLength++;
                 incPosition(&pos, &col);
             }
 
+            newToken->length = lexemLength;
+
             if (isValidNumber) {
-                printf("[TOKEN_CONSTANT_INT %d ", number);
+                newToken->type = TOKEN_CONSTANT_INT;
+            } else {
+                passedLexicalAnalysis = false;
+                printError(fileName, "invalid numeric constant", ln, col, pos, newToken->start, lexemLength);
             }
+
+            tokens[tokenCount++] = newToken;
             continue;
         }
 
-        // znak
+        // znakovna konstanta
         if (c == '\'') {
+            // moramo premakniti za eno naprej da se ['] ne steje v lexem
+            if (pos + 1 < numberOfInputChars) {
+                newToken->start = &(source[pos + 1]);
+            }
+
             char character[4];
             short int characterLength = 0;
             incPosition(&pos, &col);
+            bool charConstTooLong = false;
 
             while (source[pos] != '\0' && source[pos] != '\'') {
-                if (characterLength == 4) {
-                    printf("[TOKEN_ERROR Invalid character. Character must start and end with [\'] while having length==1\n");
-                    free(source);
-                    exit(EXIT_FAILURE);
+                if (characterLength >= 4) {
+                    charConstTooLong = true;
                 }
 
-                character[characterLength++] = source[pos];
+                if (!charConstTooLong) {
+                    character[characterLength++] = source[pos];
+                }
+
                 incPosition(&pos, &col);
             }
             incPosition(&pos, &col);
 
-            character[characterLength] = '\0';
+            newToken->length = characterLength;
 
-            if (character[0] == '\\') {
-                if ((character[1] == 'n' || character[1] == '\\' || character[1] == '\'') && characterLength == 2) {
-                    // [\n]   [\']  [\\]
-                    printf("[TOKEN_CONSTANT_CHAR %s]\n", character);
-                } else if ((ishexnumber(character[1]) && ishexnumber(character[2])) && characterLength == 3){
-                    printf("[TOKEN_CONSTANT_CHAR %s]\n", character);
-                } else {
-                    printf("[TOKEN_ERROR Invalid character. Character must start and end with '\''\n");
-                }
-            } else if (characterLength == 1) {
-                if (isalpha(character[0])) {
-                    printf("[TOKEN_CONSTANT_CHAR %s]\n", character);
-                }
+            if (charConstTooLong) {
+                newToken->type = TOKEN_ERROR;
+                passedLexicalAnalysis = false;
+                printError(fileName, "invalid character constant", ln, col, pos, newToken->start, characterLength);
             } else {
-                printf("[TOKEN_ERROR Invalid character. Character must start and end with '\''\n");
+                character[characterLength] = '\0';
+                newToken->length = characterLength;
+
+                if (character[0] == '\\') {
+                    if ((character[1] == 'n' || character[1] == '\\' || character[1] == '\'') && characterLength == 2) {
+                        // [\n]   [\']  [\\]
+                        newToken->type = TOKEN_CONSTANT_CHAR;
+                    } else if ((ishexnumber(character[1]) && ishexnumber(character[2])) && characterLength == 3) {
+                        // [\ff]
+                        newToken->type = TOKEN_CONSTANT_CHAR;
+                    } else {
+                        newToken->type = TOKEN_ERROR;
+                        passedLexicalAnalysis = false;
+                        printError(fileName, "invalid character constant", ln, col, pos, newToken->start, characterLength);
+                    }
+                } else if (characterLength == 1) {
+                    // [a], [b], ...
+                    if (isalpha(character[0])) {
+                        newToken->type = TOKEN_CONSTANT_CHAR;
+                    }
+                } else {
+                    passedLexicalAnalysis = false;
+                    newToken->type = TOKEN_ERROR;
+                    printError(fileName, "invalid character constant", ln, col, pos, newToken->start, characterLength);
+                }
             }
+
+            tokens[tokenCount++] = newToken;
             continue;
         }
 
-        // string constants
+        // string constant
         if (c == '"') {
             char* strConst = malloc(INITIAL_BUFFER_SIZE * sizeof(char));
             if (!strConst) {
                 printf("Out of memory [lexer.c tokenize]\n");
-                free(source);
+                cleanupSourceBuffer();
                 exit(EXIT_FAILURE);
             }
             incPosition(&pos, &col);
 
             int strConstLen = 0;
-            uint32_t currStrConstSize = INITIAL_BUFFER_SIZE;
+            int currStrConstSize = INITIAL_BUFFER_SIZE;
 
             bool firstChar = true;
             while (!(source[pos] == '"' && !firstChar && source[pos - 1] != '\\')) {
-
                 if (strConstLen + 1 >= currStrConstSize) {
                     char* temp = realloc(strConst, currStrConstSize + BUFFER_SIZE_INCREMENT);
                     if (!temp) {
                         free(strConst);
-                        printf("Failed to reallocate buffer\n");
-                        free(source);
+                        printf("Failed to reallocate buffer [lexer.c tokenize]\n");
+                        cleanupSourceBuffer();
                         exit(EXIT_FAILURE);
                     }
                     strConst = temp;
@@ -221,9 +316,12 @@ Token** tokenize(FILE* inputFile) {
             strConst[strConstLen] = '\0';
             incPosition(&pos, &col);
 
-            printf("[TOKEN_CONSTANT_STRING %s ]", strConst);
+            newToken->type = TOKEN_CONSTANT_STRING;
+            newToken->length = strConstLen;
 
             free(strConst);
+
+            tokens[tokenCount++] = newToken;
             continue;
         }
 
@@ -232,7 +330,7 @@ Token** tokenize(FILE* inputFile) {
             char* keyIdentBuffer = malloc(MAX_IDENTIFIER_LENGTH * sizeof(char));
             if (!keyIdentBuffer) {
                 printf("Out of memory [lexer.c tokenize]\n");
-                free(source);
+                cleanupSourceBuffer();
                 exit(EXIT_FAILURE);
             }
 
@@ -242,13 +340,10 @@ Token** tokenize(FILE* inputFile) {
             while (isalnum(source[pos]) && source[pos] != '\0' && source[pos] != '\n') {
                 keyIdentBuffer[keyIdentLen++] = source[pos];
 
-
                 incPosition(&pos, &col);
             }
-            incPosition(&pos, &col);
 
             keyIdentBuffer[keyIdentLen] = '\0';
-            TokenType tt = TOKEN_ERROR;
 
             for (int i = 0; i < numberOfReservedKeywords; i++) {
                 if (strcmp(keyIdentBuffer, reservedKeywords[i]) == 0) {
@@ -256,125 +351,202 @@ Token** tokenize(FILE* inputFile) {
                 }
             }
 
+            newToken->length = keyIdentLen;
+
             if (isKeyword) {
+
                 if (strcmp(keyIdentBuffer, "fun") == 0) {
-                    tt = TOKEN_KEYWORD_FUN;
+                    newToken->type = TOKEN_KEYWORD_FUN;
                 } else if (strcmp(keyIdentBuffer, "var") == 0) {
-                    tt = TOKEN_KEYWORD_VAR;
+                    newToken->type = TOKEN_KEYWORD_VAR;
                 } else if (strcmp(keyIdentBuffer, "if") == 0) {
-                    tt = TOKEN_KEYWORD_IF;
+                    newToken->type = TOKEN_KEYWORD_IF;
                 } else if (strcmp(keyIdentBuffer, "then") == 0) {
-                    tt = TOKEN_KEYWORD_THEN;
+                    newToken->type = TOKEN_KEYWORD_THEN;
                 } else if (strcmp(keyIdentBuffer, "else") == 0) {
-                    tt = TOKEN_KEYWORD_ELSE;
+                    newToken->type = TOKEN_KEYWORD_ELSE;
                 } else if (strcmp(keyIdentBuffer, "while") == 0) {
-                    tt = TOKEN_KEYWORD_WHILE;
+                    newToken->type = TOKEN_KEYWORD_WHILE;
                 } else if (strcmp(keyIdentBuffer, "do") == 0) {
-                    tt = TOKEN_KEYWORD_DO;
+                    newToken->type = TOKEN_KEYWORD_DO;
+                } else if (strcmp(keyIdentBuffer, "let") == 0) {
+                  newToken->type = TOKEN_KEYWORD_LET;
                 } else if (strcmp(keyIdentBuffer, "in") == 0) {
-                    tt = TOKEN_KEYWORD_IN;
+                    newToken->type = TOKEN_KEYWORD_IN;
                 } else if (strcmp(keyIdentBuffer, "end") == 0) {
-                    tt = TOKEN_KEYWORD_END;
+                    newToken->type = TOKEN_KEYWORD_END;
                 }
             }
 
-
-            if (isKeyword) {
-                printf("[%s %s]\n", reservedKeywordsTokens[tt - TOKEN_KEYWORD_FUN] , keyIdentBuffer);
-            } else {
-                printf("[TOKEN_IDENTIFIER %s]\n", keyIdentBuffer);
+           if (!isKeyword) {
+                newToken->type = TOKEN_IDENTIFIER;
             }
 
-
             free(keyIdentBuffer);
+
+            tokens[tokenCount++] = newToken;
             continue;
         }
 
+        newToken->length = 1; // default vrednost, po potrebi damo na 2
         if (c == '&') {
             if (source[pos + 1] == '&') {
-                printf("[TOKEN_SYMBOL_LOGICAL_AND ");
-                pos++;
+                newToken->type = TOKEN_SYMBOL_LOGICAL_AND;
+                incPosition(&pos, &col);
+                newToken->length = 2;
             } else {
-                printf("[TOKEN_ERROR ");
+                printError(fileName, "invalid logical operator", ln, col, pos, newToken->start, 2);
+                passedLexicalAnalysis = false;
+                newToken->type = TOKEN_ERROR;
             }
         } else if (c == '|') {
             if (source[pos + 1] == '|') {
-                printf("[TOKEN_SYMBOL_LOGICAL_OR ");
-                pos++;
+                incPosition(&pos, &col);
+                newToken->type = TOKEN_SYMBOL_LOGICAL_OR;
+                newToken->length = 2;
             } else {
-                printf("[TOKEN_ERROR ");
+                printError(fileName, "invalid logical operator", ln, col, pos, newToken->start, 2);
+                passedLexicalAnalysis = false;
+                newToken->type = TOKEN_ERROR;
             }
         } else if (c == '!') {
             if (source[pos + 1] == '=') {
-                printf("[TOKEN_SYMBOL_LOGICAL_NOT_EQUALS ");
-                pos++;
+                incPosition(&pos, &col);
+                newToken->type = TOKEN_SYMBOL_LOGICAL_NOT_EQUALS;
+                newToken->length = 2;
             } else {
-                printf("[TOKEN_SYMBOL_LOGICAL_NOT ");
+                newToken->type = TOKEN_SYMBOL_LOGICAL_NOT;
             }
         } else if (c == '=') {
             if (source[pos + 1] == '=') {
-                printf("[TOKEN_SYMBOL_LOGICAL_EQUALS ");
-                pos++;
+                incPosition(&pos, &col);
+                newToken->type = TOKEN_SYMBOL_LOGICAL_EQUALS;
+                newToken->length = 2;
             } else {
-                printf("[TOKEN_SYMBOL_ASSIGN ");
+                newToken->type = TOKEN_SYMBOL_ASSIGN;
             }
         } else if (c == '>') {
             if (source[pos + 1] == '=') {
-                printf("[TOKEN_SYMBOL_LOGICAL_GREATER_OR_EQUALS ");
-                pos++;
+                incPosition(&pos, &col);
+                newToken->type = TOKEN_SYMBOL_LOGICAL_GREATER_OR_EQUALS;
+                newToken->length = 2;
             } else {
-                printf("[TOKEN_SYMBOL_LOGICAL_GREATER ");
+                newToken->type = TOKEN_SYMBOL_LOGICAL_GREATER;
             }
         } else if (c == '<') {
             if (source[pos + 1] == '=') {
-                printf("[TOKEN_SYMBOL_LOGICAL_LESS_OR_EQUALS ");
-                pos++;
+                incPosition(&pos, &col);
+                newToken->type = TOKEN_SYMBOL_LOGICAL_LESS_OR_EQUALS;
+                newToken->length = 2;
             } else {
-                printf("[TOKEN_SYMBOL_LOGICAL_LESS ");
+                newToken->type = TOKEN_SYMBOL_LOGICAL_LESS;
             }
         } else {
             // za posamezne znake oz. operatorje...
             switch (c) {
                 case ',':
-                    printf("[TOKEN_SYMBOL_COMMA ");
-                break;
+                    newToken->type = TOKEN_SYMBOL_COMMA;
+                    break;
                 case '+':
-                    printf("[TOKEN_SYMBOL_ARITHMETIC_PLUS ");
-                break;
+                    newToken->type = TOKEN_SYMBOL_ARITHMETIC_PLUS;
+                    break;
                 case '-':
-                    printf("[TOKEN_SYMBOL_ARITHMETIC_MINUS ");
-                break;
+                    newToken->type = TOKEN_SYMBOL_ARITHMETIC_MINUS;
+                    break;
                 case '*':
-                    printf("[TOKEN_SYMBOL_ARITHMETIC_MULTIPLY ");
-                break;
+                    newToken->type = TOKEN_SYMBOL_ARITHMETIC_MULTIPLY;
+                    break;
                 case '/':
-                    printf("[TOKEN_SYMBOL_ARITHMETIC_DIVIDE ");
-                break;
+                    newToken->type = TOKEN_SYMBOL_ARITHMETIC_DIVIDE;
+                    break;
                 case '%':
-                    printf("[TOKEN_SYMBOL_ARITHMETIC_MOD ");
-                break;
+                    newToken->type = TOKEN_SYMBOL_ARITHMETIC_MOD;
+                    break;
                 case '^':
-                    printf("[TOKEN_SYMBOL_CARET ");
-                break;
+                    newToken->type = TOKEN_SYMBOL_CARET;
+                    break;
                 case '(':
-                    printf("[TOKEN_SYMBOL_LEFT_PAREN ");
-                break;
+                    newToken->type = TOKEN_SYMBOL_LEFT_PAREN;
+                    break;
                 case ')':
-                    printf("[TOKEN_SYMBOL_RIGHT_PAREN ");
-                break;
+                    newToken->type = TOKEN_SYMBOL_RIGHT_PAREN;
+                    break;
                 default:
-                    printf("[TOKEN_ERROR ");
-                break;
+                    newToken->type = TOKEN_ERROR;
+                    passedLexicalAnalysis = false;
+                    printError(fileName, "unknown symbol", ln, col, pos, newToken->start, 1);
+                    break;
             }
         }
-
-
-        printf("ln:%d col:%d pos:%d]: %c\n", ln, col, pos, c);
-
-        pos++;
-        col++;
+        incPosition(&pos, &col);
+        tokens[tokenCount++] = newToken;
     }
 
-    free(source);
-    return NULL;
+    return tokens;
+}
+
+void printTokens(Token** tokens) {
+    const int numOfTokens = retrieveTokenCount();
+
+    for (int i = 0; i < numOfTokens; i++) {
+        const Token* t = tokens[i];
+
+        const char* typeName = "";
+        switch (t->type) {
+            case TOKEN_CONSTANT_INT:                        typeName = "TOKEN_CONSTANT_INT";                     break;
+            case TOKEN_CONSTANT_CHAR:                       typeName = "TOKEN_CONSTANT_CHAR";                    break;
+            case TOKEN_CONSTANT_STRING:                     typeName = "TOKEN_CONSTANT_STRING";                  break;
+            case TOKEN_SYMBOL_ASSIGN:                       typeName = "TOKEN_SYMBOL_ASSIGN";                    break;
+            case TOKEN_SYMBOL_COMMA:                        typeName = "TOKEN_SYMBOL_COMMA";                     break;
+            case TOKEN_SYMBOL_LOGICAL_AND:                  typeName = "TOKEN_SYMBOL_LOGICAL_AND";               break;
+            case TOKEN_SYMBOL_LOGICAL_OR:                   typeName = "TOKEN_SYMBOL_LOGICAL_OR";                break;
+            case TOKEN_SYMBOL_LOGICAL_NOT:                  typeName = "TOKEN_SYMBOL_LOGICAL_NOT";               break;
+            case TOKEN_SYMBOL_LOGICAL_EQUALS:               typeName = "TOKEN_SYMBOL_LOGICAL_EQUALS";            break;
+            case TOKEN_SYMBOL_LOGICAL_NOT_EQUALS:           typeName = "TOKEN_SYMBOL_LOGICAL_NOT_EQUALS";        break;
+            case TOKEN_SYMBOL_LOGICAL_GREATER:              typeName = "TOKEN_SYMBOL_LOGICAL_GREATER";           break;
+            case TOKEN_SYMBOL_LOGICAL_LESS:                 typeName = "TOKEN_SYMBOL_LOGICAL_LESS";              break;
+            case TOKEN_SYMBOL_LOGICAL_GREATER_OR_EQUALS:    typeName = "TOKEN_SYMBOL_LOGICAL_GREATER_OR_EQUALS"; break;
+            case TOKEN_SYMBOL_LOGICAL_LESS_OR_EQUALS:       typeName = "TOKEN_SYMBOL_LOGICAL_LESS_OR_EQUALS";    break;
+            case TOKEN_SYMBOL_ARITHMETIC_PLUS:              typeName = "TOKEN_SYMBOL_ARITHMETIC_PLUS";           break;
+            case TOKEN_SYMBOL_ARITHMETIC_MINUS:             typeName = "TOKEN_SYMBOL_ARITHMETIC_MINUS";          break;
+            case TOKEN_SYMBOL_ARITHMETIC_MULTIPLY:          typeName = "TOKEN_SYMBOL_ARITHMETIC_MULTIPLY";       break;
+            case TOKEN_SYMBOL_ARITHMETIC_DIVIDE:            typeName = "TOKEN_SYMBOL_ARITHMETIC_DIVIDE";         break;
+            case TOKEN_SYMBOL_ARITHMETIC_MOD:               typeName = "TOKEN_SYMBOL_ARITHMETIC_MOD";            break;
+            case TOKEN_SYMBOL_CARET:                        typeName = "TOKEN_SYMBOL_CARET";                     break;
+            case TOKEN_SYMBOL_LEFT_PAREN:                   typeName = "TOKEN_SYMBOL_LEFT_PAREN";                break;
+            case TOKEN_SYMBOL_RIGHT_PAREN:                  typeName = "TOKEN_SYMBOL_RIGHT_PAREN";               break;
+            case TOKEN_IDENTIFIER:                          typeName = "TOKEN_IDENTIFIER";                       break;
+            case TOKEN_KEYWORD_FUN:                         typeName = "TOKEN_KEYWORD_FUN";                      break;
+            case TOKEN_KEYWORD_VAR:                         typeName = "TOKEN_KEYWORD_VAR";                      break;
+            case TOKEN_KEYWORD_IF:                          typeName = "TOKEN_KEYWORD_IF";                       break;
+            case TOKEN_KEYWORD_THEN:                        typeName = "TOKEN_KEYWORD_THEN";                     break;
+            case TOKEN_KEYWORD_ELSE:                        typeName = "TOKEN_KEYWORD_ELSE";                     break;
+            case TOKEN_KEYWORD_WHILE:                       typeName = "TOKEN_KEYWORD_WHILE";                    break;
+            case TOKEN_KEYWORD_DO:                          typeName = "TOKEN_KEYWORD_DO";                       break;
+            case TOKEN_KEYWORD_LET:                         typeName = "TOKEN_KEYWORD_LET";                      break;
+            case TOKEN_KEYWORD_IN:                          typeName = "TOKEN_KEYWORD_IN";                       break;
+            case TOKEN_KEYWORD_END:                         typeName = "TOKEN_KEYWORD_END";                      break;
+            case TOKEN_ERROR:                               typeName = "TOKEN_ERROR";                            break;
+            case TOKEN_EOF:                                 typeName = "TOKEN_EOF";                              break;
+            default:                                        typeName = "UNKNOWN_TOKEN";                          break;
+        }
+
+        printf("Token[%3d] %-28s \"%.*s\"  (ln:%d, col:%d, pos:%d)\n",
+               i,
+               typeName,
+               t->length,
+               t->start,
+               t->location->ln,
+               t->location->col,
+               t->location->pos);
+    }
+}
+
+void cleanupTokens(const int numOfTokens, Token** tokens) {
+    for (int i = 0; i < numOfTokens; i++) {
+        Token* t = tokens[i];
+        free(t->location);
+        free(t);
+    }
+    free(tokens);
 }
