@@ -283,43 +283,38 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
 
         // string constant
         if (c == '"') {
-            char* strConst = malloc(INITIAL_BUFFER_SIZE * sizeof(char));
-            if (!strConst) {
-                printf("Out of memory [lexer.c tokenize]\n");
-                cleanupSourceBuffer();
-                exit(EXIT_FAILURE);
-            }
-            incPosition(&pos, &col);
+            newToken->start = &source[pos];
 
-            int strConstLen = 0;
-            int currStrConstSize = INITIAL_BUFFER_SIZE;
-
+            int len = 0;
             bool firstChar = true;
-            while (!(source[pos] == '"' && !firstChar && source[pos - 1] != '\\')) {
-                if (strConstLen + 1 >= currStrConstSize) {
-                    char* temp = realloc(strConst, currStrConstSize + BUFFER_SIZE_INCREMENT);
-                    if (!temp) {
-                        free(strConst);
-                        printf("Failed to reallocate buffer [lexer.c tokenize]\n");
-                        cleanupSourceBuffer();
-                        exit(EXIT_FAILURE);
-                    }
-                    strConst = temp;
+            bool unterminated = true;
 
-                    currStrConstSize += BUFFER_SIZE_INCREMENT;
+            while (source[pos] != '\0') {
+                // string se spana cez vec vrstic kar ni dovoljeno
+                if (source[pos] == '\n') {
+                    break;
                 }
 
-                strConst[strConstLen++] = source[pos];
-                incPosition(&pos, &col);
+                if (source[pos] == '"' && source[pos - 1] != '\\' && !firstChar) {
+                    unterminated = false;
+                    len++; // odstrani ce noces zadnjega " v lexemu + bool firstChar
+                    break;
+                }
                 firstChar = false;
+                incPosition(&pos, &col);
+                len++;
             }
-            strConst[strConstLen] = '\0';
-            incPosition(&pos, &col);
 
-            newToken->type = TOKEN_CONSTANT_STRING;
-            newToken->length = strConstLen;
+            newToken->length = len;
 
-            free(strConst);
+            if (!unterminated) {
+                newToken->type = TOKEN_CONSTANT_STRING;
+                incPosition(&pos, &col);
+            } else {
+                newToken->type = TOKEN_ERROR;
+                passedLexicalAnalysis = false;
+                printError(fileName,"unterminated string constant",ln,col, pos, newToken->start,len);
+            }
 
             tokens[tokenCount++] = newToken;
             continue;
