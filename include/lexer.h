@@ -90,4 +90,30 @@ void cleanupSourceBuffer();
 // funkcija sprosti pomnilnik ki ga zasedejo ustvarjeni tokeni
 void cleanupTokens(int numOfTokens, Token** tokens);
 
+/*
+ * funkcije in ostalo za potrebe parserja
+ */
+// wrapper struktura za seznam Token-ov
+typedef struct {
+    Token** tokens;
+    int     numOfTokens;
+    int     index;
+} TokenStream;
+
+// funkcija ustvari TokenStream iz outputa funkcije `tokenize`
+TokenStream* createTokenStream(Token** tokens, int numOfTokens);
+
+// funkcija vrne naslednji token in poveca index za +1
+// nikoli ne vrne NULL, ko je na koncu znova in znova vraca EOF token
+Token* nextToken(TokenStream* ts);
+
+// funkcija vrne naslednji token ampak ne poveca index-a za +1
+Token* peekToken(const TokenStream* ts);
+
+// funkcija prevrti TokenStream za en Token nazaj
+void rewindToken(TokenStream* ts);
+
+// funkcija sprosti pomnilnik od TokenStream-a ne pa Token** tokens
+void freeTokenStream(TokenStream* ts);
+
 #endif //LEXER_H

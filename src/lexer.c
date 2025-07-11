@@ -482,7 +482,62 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
         tokens[tokenCount++] = newToken;
     }
 
+    // ustvarimo zadnji (eof) Token (za potrebe TokenStream funkcij)
+    Token* eofToken = malloc(sizeof(Token));
+    if (!eofToken) {
+        printf("Out of memory [lexer.c tokenize]\n");
+        cleanupSourceBuffer();
+        exit(EXIT_FAILURE);
+    }
+    eofToken->type = TOKEN_EOF;
+    eofToken->start = NULL;
+    eofToken->length = 0;
+    eofToken->location = NULL;
+
+    tokens[tokenCount++] = eofToken;
+
     return tokens;
+}
+
+//
+// TokenStream funkcije
+//
+TokenStream* createTokenStream(Token** tokens, const int numOfTokens) {
+    TokenStream* ts = malloc(sizeof(TokenStream));
+    if (!ts) {
+        printf("Out of memory [lexer.c tokenize]\n");
+        cleanupSourceBuffer();
+        cleanupTokens(numOfTokens, tokens);
+        exit(EXIT_FAILURE);
+    }
+
+    ts->tokens = tokens;
+    ts->numOfTokens = numOfTokens;
+    ts->index = 0;
+
+    return ts;
+}
+
+Token* nextToken(TokenStream* ts) {
+    if (ts->index >= ts->numOfTokens) {
+        return (ts->tokens)[ts->numOfTokens - 1];
+    }
+
+    return (ts->tokens)[ts->index++];
+}
+
+Token* peekToken(const TokenStream* ts) {
+    return (ts->tokens)[ts->index];
+}
+
+void rewindToken(TokenStream* ts) {
+    if (ts->index != 0) {
+        ts->index = ts->index - 1;
+    }
+}
+
+void freeTokenStream(TokenStream* ts) {
+    free(ts);
 }
 
 void printTokens(Token** tokens) {
@@ -531,7 +586,10 @@ void printTokens(Token** tokens) {
             default:                                        typeName = "UNKNOWN_TOKEN";                          break;
         }
 
-        printf("Token[%3d] %-28s \"%.*s\"  (ln:%d, col:%d, pos:%d)\n",
+        if (t->type == TOKEN_EOF) {
+            printf("Token[%3d] TOKEN_EOF", i);
+        } else {
+            printf("Token[%3d] %-28s \"%.*s\"  (ln:%d, col:%d, pos:%d)\n",
                i,
                typeName,
                t->length,
@@ -539,6 +597,7 @@ void printTokens(Token** tokens) {
                t->location->ln,
                t->location->col,
                t->location->pos);
+        }
     }
 }
 

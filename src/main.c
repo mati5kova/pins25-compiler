@@ -42,6 +42,8 @@ int main(const int argc, char* argv[]) {
     const int numOfTokens = retrieveTokenCount();
     const bool passedLexicalAnalysis = isLexicallyValid();
 
+    TokenStream* ts = createTokenStream(tokens, numOfTokens);
+
     if (opts.list_tokens_all && passedLexicalAnalysis) {
         printTokens(tokens);
     }
@@ -50,6 +52,7 @@ int main(const int argc, char* argv[]) {
     fclose(in);
     cleanupSourceBuffer();
     cleanupTokens(numOfTokens, tokens);
+    freeTokenStream(ts);
 
     return EXIT_SUCCESS;
 }
