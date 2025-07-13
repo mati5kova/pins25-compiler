@@ -81,6 +81,9 @@ bool isLexicallyValid();
 // funkcija spremeni vsebino vhodne datoteke "inputFile" v zaporedje tokenov
 Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName);
 
+// funkcja ustvari nov Token*
+Token* createToken(TokenType type, char* start, int length, int ln, int col, int pos);
+
 // funkcija izpise vse tokene v berljiv obliki
 void printTokens(Token** tokens);
 
@@ -88,7 +91,7 @@ void printTokens(Token** tokens);
 void cleanupSourceBuffer();
 
 // funkcija sprosti pomnilnik ki ga zasedejo ustvarjeni tokeni
-void cleanupTokens(int numOfTokens, Token** tokens);
+void cleanupTokens(Token** tokens);
 
 /*
  * funkcije in ostalo za potrebe parserja

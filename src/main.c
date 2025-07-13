@@ -39,19 +39,30 @@ int main(const int argc, char* argv[]) {
     }
 
     Token** tokens = tokenize(in, &opts, opts.input_files[0]);
+
+    fclose(in);
+
+    if (!tokens) {
+        fprintf(stderr, "Error occured during lexical analysis of '%s'\n", opts.input_files[0]);
+        return EXIT_FAILURE;
+    }
+
     const int numOfTokens = retrieveTokenCount();
     const bool passedLexicalAnalysis = isLexicallyValid();
-
-    TokenStream* ts = createTokenStream(tokens, numOfTokens);
 
     if (opts.list_tokens_all && passedLexicalAnalysis) {
         printTokens(tokens);
     }
 
-    // cleanup
-    fclose(in);
+    TokenStream* ts = createTokenStream(tokens, numOfTokens);
+    if (!ts) {
+        fprintf(stderr, "Error creating token stream\n");
+        return EXIT_FAILURE;
+    }
+
+    // cleanup ce je bilo vse vredu
     cleanupSourceBuffer();
-    cleanupTokens(numOfTokens, tokens);
+    cleanupTokens(tokens);
     freeTokenStream(ts);
 
     return EXIT_SUCCESS;

@@ -27,9 +27,8 @@ int tokenCount = 0;                   // stevilo tokenov v tabeli tokenov
 
 char* source;                         // kazalec na buffer z vsebino vhodne datoteke
 
-// stevilo rezerviranih besed jezika
-const short numberOfReservedKeywords = 10;
-const char* reservedKeywords[] = {"fun", "var", "if", "then", "else", "while", "do", "let", "in", "end"};
+const short numberOfReservedKeywords = 10; // stevilo rezerviranih besed jezika
+const char* reservedKeywords[] = {"fun", "var", "if", "then", "else", "while", "do", "let", "in", "end"}; // rezervirane besede
 
 // `skipUntilLineEnd` bere znake do konca vrstice in vrne stevilo prebranih znakov
 int skipUntilLineEnd(const char* src) {
@@ -74,8 +73,7 @@ char* stringifyInputFile(FILE* inputFile) {
     int currentMaxBufferSIze = INITIAL_BUFFER_SIZE;
     char* buffer = malloc(INITIAL_BUFFER_SIZE * sizeof(char));
     if (!buffer) {
-        printf("Out of memory [lexer.c stringifyInputFile]\n");
-        exit(EXIT_FAILURE);
+        return NULL;
     }
 
     int c;
@@ -88,8 +86,7 @@ char* stringifyInputFile(FILE* inputFile) {
             char* temp = realloc(buffer, currentMaxBufferSIze + BUFFER_SIZE_INCREMENT);
             if (!temp) {
                 free(buffer);
-                printf("Failed to reallocate buffer [lexer.c stringifyInputFile]\n");
-                exit(EXIT_FAILURE);
+                return NULL;
             }
             buffer = temp;
 
@@ -122,12 +119,16 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
 
     Token** tokens = malloc(INITIAL_TOKEN_COUNT * sizeof(Token*));
     if (!tokens) {
-        printf("Out of memory [lexer.c tokenize]\n");
-        exit(EXIT_FAILURE);
+        return NULL;
     }
 
     // source je sedaj nasa tabela znakov napolnjena z vsebino vhodne datoteke
     source = stringifyInputFile(inputFile);
+    if (!source) {
+        // ce je bila napaka pri malloc-u v `stringifyInputFile`
+        cleanupTokens(tokens);
+        return NULL;
+    }
 
     // glavni loop ki gre skozi vse znake source bufferja
     while (source[pos] != '\0' && pos < numberOfInputChars) {
@@ -135,9 +136,9 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
             maxNumberOfTokensInBuffer += TOKEN_COUNT_INCREMENT;
             Token** temp = realloc(tokens, maxNumberOfTokensInBuffer * sizeof(Token*));
             if (!temp) {
-                fprintf(stderr, "Failed to reallocate tokens array\n");
+                cleanupTokens(tokens);
                 cleanupSourceBuffer();
-                exit(EXIT_FAILURE);
+                return NULL;
             }
             tokens = temp;
         }
@@ -164,23 +165,12 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
         }
 
         // ustvarimo nov Token
-        Token* newToken = malloc(sizeof(Token));
+        Token* newToken = createToken(TOKEN_EOF, &(source[pos]), 0, ln, col, pos);
         if (!newToken) {
-            printf("Out of memory [lexer.c tokenize]\n");
+            cleanupTokens(tokens);
             cleanupSourceBuffer();
-            exit(EXIT_FAILURE);
+            return NULL;
         }
-        newToken->start = &(source[pos]); // zacetek lexema je trenutni znak
-        newToken->location = malloc(sizeof(InFileLocation));
-        if (!(newToken->location)) {
-            printf("Out of memory [lexer.c tokenize]\n");
-            cleanupSourceBuffer();
-            free(newToken);
-            exit(EXIT_FAILURE);
-        }
-        newToken->location->col = col;
-        newToken->location->ln = ln;
-        newToken->location->pos = pos;
 
         // cela stevila
         if (isdigit(c)) {
@@ -324,9 +314,11 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
         if (isalpha(c) || c == '_') {
             char* keyIdentBuffer = malloc(MAX_IDENTIFIER_LENGTH * sizeof(char));
             if (!keyIdentBuffer) {
-                printf("Out of memory [lexer.c tokenize]\n");
+                free(newToken->location);
+                free(newToken);
+                cleanupTokens(tokens);
                 cleanupSourceBuffer();
-                exit(EXIT_FAILURE);
+                return NULL;
             }
 
             bool isKeyword = false;
@@ -478,16 +470,12 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
     }
 
     // ustvarimo zadnji (eof) Token (za potrebe TokenStream funkcij)
-    Token* eofToken = malloc(sizeof(Token));
+    Token* eofToken = createToken(TOKEN_EOF, NULL, 0, -1, -1, -1);
     if (!eofToken) {
-        printf("Out of memory [lexer.c tokenize]\n");
+        cleanupTokens(tokens);
         cleanupSourceBuffer();
-        exit(EXIT_FAILURE);
+        return NULL;
     }
-    eofToken->type = TOKEN_EOF;
-    eofToken->start = NULL;
-    eofToken->length = 0;
-    eofToken->location = NULL;
 
     tokens[tokenCount++] = eofToken;
 
@@ -500,10 +488,9 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
 TokenStream* createTokenStream(Token** tokens, const int numOfTokens) {
     TokenStream* ts = malloc(sizeof(TokenStream));
     if (!ts) {
-        printf("Out of memory [lexer.c tokenize]\n");
         cleanupSourceBuffer();
-        cleanupTokens(numOfTokens, tokens);
-        exit(EXIT_FAILURE);
+        cleanupTokens(tokens);
+        return NULL;
     }
 
     ts->tokens = tokens;
@@ -535,13 +522,35 @@ void freeTokenStream(TokenStream* ts) {
     free(ts);
 }
 
+Token* createToken(const TokenType type, char* start, const int length, const int ln, const int col, const int pos) {
+    Token* newToken = malloc(sizeof(Token));
+    if (!newToken) {
+        return NULL;
+    }
+    newToken->type = type;
+    newToken->start = start;
+    newToken->length = length;
+
+    newToken->location = malloc(sizeof(InFileLocation));
+    if (!newToken->location) {
+        free(newToken);
+        return NULL;
+    }
+    newToken->location->ln = ln;
+    newToken->location->col = col;
+    newToken->location->pos = pos;
+
+    return newToken;
+}
+
+
 void printTokens(Token** tokens) {
     const int numOfTokens = retrieveTokenCount();
 
     for (int i = 0; i < numOfTokens; i++) {
         const Token* t = tokens[i];
 
-        const char* typeName = "";
+        const char* typeName;
         switch (t->type) {
             case TOKEN_CONSTANT_INT:                        typeName = "TOKEN_CONSTANT_INT";                     break;
             case TOKEN_CONSTANT_CHAR:                       typeName = "TOKEN_CONSTANT_CHAR";                    break;
@@ -596,7 +605,8 @@ void printTokens(Token** tokens) {
     }
 }
 
-void cleanupTokens(const int numOfTokens, Token** tokens) {
+void cleanupTokens(Token** tokens) {
+    const int numOfTokens = retrieveTokenCount();
     for (int i = 0; i < numOfTokens; i++) {
         Token* t = tokens[i];
         free(t->location);
