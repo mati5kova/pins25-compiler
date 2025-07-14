@@ -11,21 +11,23 @@
 #include "../include/error_utils.h"
 #include "../include/lexer.h"
 
-#define INITIAL_TOKEN_COUNT 200       // zacetno stevilo tokenov
-#define TOKEN_COUNT_INCREMENT 100     // increment za stevilo tokenov
+#define INITIAL_TOKEN_COUNT 200                         // zacetno stevilo tokenov
+#define TOKEN_COUNT_INCREMENT 100                       // increment za stevilo tokenov
 
-#define INITIAL_BUFFER_SIZE 500       // zacetna velikost source bufferja
-#define BUFFER_SIZE_INCREMENT 250     // increment za source buffer
+#define INITIAL_BUFFER_SIZE 500                         // zacetna velikost source bufferja
+#define BUFFER_SIZE_INCREMENT 250                       // increment za source buffer
 
-#define MAX_IDENTIFIER_LENGTH 64      // maksimalna dolzina za imena spremenljivk (63 znakov + \0)
+#define MAX_IDENTIFIER_LENGTH 64                        // maksimalna dolzina za imena spremenljivk (63 znakov + \0)
 
-bool passedLexicalAnalysis = true;    // bool ali so bile v fazi lexikalne analize zaznane kaksne napake
+#define PRINT_HELP_LEXER_TITLE "PINS'25 LEXICAL RULES"  // title za --help za lexikalno analizo
 
-int numberOfInputChars = 0;           // stevilo znakov v vhodni datoteki da vemo do kam loop-amo v `tokenize`
+bool passedLexicalAnalysis = true;                      // bool ali so bile v fazi lexikalne analize zaznane kaksne napake
 
-int tokenCount = 0;                   // stevilo tokenov v tabeli tokenov
+int numberOfInputChars = 0;                             // stevilo znakov v vhodni datoteki da vemo do kam loop-amo v `tokenize`
 
-char* source;                         // kazalec na buffer z vsebino vhodne datoteke
+int tokenCount = 0;                                     // stevilo tokenov v tabeli tokenov
+
+char* source;                                           // kazalec na buffer z vsebino vhodne datoteke
 
 const short numberOfReservedKeywords = 10; // stevilo rezerviranih besed jezika
 const char* reservedKeywords[] = {"fun", "var", "if", "then", "else", "while", "do", "let", "in", "end"}; // rezervirane besede
@@ -183,9 +185,11 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
             // stevilo stevk v stevilu
             int lexemLength = 0;
 
+            bool hasLeadingZeros = false;
             if (firstDigit == 0 && isdigit(source[pos + 1])) {
                 isValidNumber = false;
                 newToken->type = TOKEN_ERROR;
+                hasLeadingZeros = true;
             }
 
             // beremo dokler so stevke
@@ -202,6 +206,13 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
             } else {
                 passedLexicalAnalysis = false;
                 printError(fileName, "invalid numeric constant", ln, col, pos, newToken->start, lexemLength);
+                if (hasLeadingZeros && opts->verbose) {
+                    printVerboseInfo("numeric constant has leading zeros");
+                }
+                if (opts->help) {
+                    printHelp(PRINT_HELP_LEXER_TITLE, "Numeric constants consist of non-empty base 10 digits with optional leading +/-.\n"
+                                                      "Leading zeros are not allowed.");
+                }
             }
 
             tokens[tokenCount++] = newToken;
@@ -210,50 +221,64 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
 
         // znakovna konstanta
         if (c == '\'') {
-            // moramo premakniti za eno naprej da se ['] ne steje v lexem
-            if (pos + 1 < numberOfInputChars) {
-                newToken->start = &(source[pos + 1]);
-            }
+            incPosition(&pos, &col);
+
+            bool charConstTooLong = false;
+            bool isValidCharConstant = true;
 
             char character[4];
             short int characterLength = 0;
-            incPosition(&pos, &col);
-            bool charConstTooLong = false;
 
             while (source[pos] != '\0' && source[pos] != '\'') {
                 if (characterLength >= 4) {
                     charConstTooLong = true;
+                    isValidCharConstant = false;
                 }
 
                 if (!charConstTooLong) {
-                    character[characterLength++] = source[pos];
+                    character[characterLength] = source[pos];
                 }
-
+                characterLength++;
                 incPosition(&pos, &col);
             }
             incPosition(&pos, &col);
 
-            newToken->length = characterLength;
+            newToken->length = characterLength + 2;
 
             if (charConstTooLong) {
                 newToken->type = TOKEN_ERROR;
                 passedLexicalAnalysis = false;
-                printError(fileName, "invalid character constant", ln, col, pos, newToken->start, characterLength);
+                printError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
+                if (opts->verbose) {
+                    printVerboseInfo("character constant is too long");
+                }
             } else {
-                character[characterLength] = '\0';
-                newToken->length = characterLength;
-
                 if (character[0] == '\\') {
                     if ((character[1] == 'n' || character[1] == '\\' || character[1] == '\'') && characterLength == 2) {
                         // [\n]   [\']  [\\]
                         newToken->type = TOKEN_CONSTANT_CHAR;
-                    } else if ((ishexnumber(character[1]) && ishexnumber(character[2])) && characterLength == 3) {
-                        // [\ff]
-                        newToken->type = TOKEN_CONSTANT_CHAR;
+                    } else if (ishexnumber(character[1]) && characterLength == 3) {
+                        // [\f?]
+                        if (ishexnumber(character[2])) {
+                            // [\ff]
+                            newToken->type = TOKEN_CONSTANT_CHAR;
+                        } else {
+                            newToken->type = TOKEN_ERROR;
+                            passedLexicalAnalysis = false;
+                            isValidCharConstant = false;
+                            printError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
+                            if (opts->verbose) {
+                                printVerboseInfo("invalid hexadecimal representation");
+                            }
+                        }
                     } else {
                         newToken->type = TOKEN_ERROR;
                         passedLexicalAnalysis = false;
-                        printError(fileName, "invalid character constant", ln, col, pos, newToken->start, characterLength);
+                        isValidCharConstant = false;
+                        printError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
+                        if (opts->verbose) {
+                            printVerboseInfo("invalid combination of characters after '\\'");
+                        }
                     }
                 } else if (characterLength == 1) {
                     // [a], [b], ...
@@ -262,9 +287,20 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                     }
                 } else {
                     passedLexicalAnalysis = false;
+                    isValidCharConstant = false;
                     newToken->type = TOKEN_ERROR;
-                    printError(fileName, "invalid character constant", ln, col, pos, newToken->start, characterLength);
+                    printError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
                 }
+            }
+
+            if (!isValidCharConstant && opts->help) {
+                printHelp(PRINT_HELP_LEXER_TITLE,
+                                "Character constants consist of a single character enclosed in single quotes (').\n"
+                                     "Valid forms are:\n"
+                                     "  - A printable ASCII character (code 32…126).\n"
+                                     "  - A simple escape: \\n, \\\', or \\\\\n"
+                                     "  - A hex escape: \\XX where X is a hex digit (0…9, a…f)"
+                                     );
             }
 
             tokens[tokenCount++] = newToken;
@@ -273,20 +309,39 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
 
         // string constant
         if (c == '"') {
-            newToken->start = &source[pos];
 
             int len = 0;
             bool firstChar = true;
-            bool unterminated = true;
+            bool terminated = false;
+
+            bool hasInvalidEscape = false;
+            bool hasInvalidHex = false;
 
             while (source[pos] != '\0') {
                 // string se spana cez vec vrstic kar ni dovoljeno
                 if (source[pos] == '\n') {
+                    terminated = false;
                     break;
                 }
 
+                if (source[pos] == '\\') {
+                    // simple escapes \n, \\, \", \'
+                    if (pos + 1 < numberOfInputChars && (source[pos + 1] == 'n' || source[pos + 1] == '\\' || source[pos + 1] == '"' || source[pos + 1] == '\'')) {
+                        // vredu
+                    } else if (pos + 2 < numberOfInputChars && ishexnumber(source[pos + 1])) {
+                        if (ishexnumber(source[pos + 2])) {
+                            // vredu
+                        } else {
+                            hasInvalidHex = true;
+                        }
+                    } else {
+                        // npr. \q
+                        hasInvalidEscape = true;
+                    }
+                }
+
                 if (source[pos] == '"' && source[pos - 1] != '\\' && !firstChar) {
-                    unterminated = false;
+                    terminated = true;
                     len++; // odstrani ce noces zadnjega " v lexemu + bool firstChar
                     break;
                 }
@@ -297,14 +352,38 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
 
             newToken->length = len;
 
-            if (!unterminated) {
-                newToken->type = TOKEN_CONSTANT_STRING;
-                incPosition(&pos, &col);
-            } else {
-                newToken->type = TOKEN_ERROR;
+            if (hasInvalidEscape || !terminated || hasInvalidHex) {
                 passedLexicalAnalysis = false;
-                printError(fileName,"unterminated string constant",ln,col, pos, newToken->start,len);
             }
+
+            if (hasInvalidEscape || !terminated || hasInvalidHex) {
+                newToken->type = TOKEN_ERROR;
+                printError(fileName,"invalid string constant",ln,col, pos, newToken->start,len);
+
+                if (opts->verbose) {
+                    if (hasInvalidEscape) {
+                        printVerboseInfo("invalid presentation of backslash \\ character");
+                    } else if (hasInvalidHex) {
+                        printVerboseInfo("invalid hexadecimal representation");
+                    } else if (!terminated) {
+                        printVerboseInfo("unterminated string constant");
+                    }
+                }
+
+                if (opts->help) {
+                    printHelp(PRINT_HELP_LEXER_TITLE,
+                                "String constants consist zero or more characters enclosed in double quotes (\").\n"
+                                     "Valid forms are:\n"
+                                     "  - Printable ASCII characters (code 32…126).\n"
+                                     "  - Simple escapes: \\n, \\\", or \\\\\n"
+                                     "  - Hex escapes: \\XX where X is a hex digit (0…9, a…f)"
+                                );
+                }
+            } else {
+                newToken->type = TOKEN_CONSTANT_STRING;
+            }
+
+            incPosition(&pos, &col);
 
             tokens[tokenCount++] = newToken;
             continue;
@@ -375,6 +454,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
             continue;
         }
 
+        // logicni in nekateri ostali operatorji
         newToken->length = 1; // default vrednost, po potrebi damo na 2
         if (c == '&') {
             if (source[pos + 1] == '&') {
@@ -459,9 +539,11 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                     newToken->type = TOKEN_SYMBOL_RIGHT_PAREN;
                     break;
                 default:
+                    incPosition(&pos, &col);
                     newToken->type = TOKEN_ERROR;
                     passedLexicalAnalysis = false;
                     printError(fileName, "unknown symbol", ln, col, pos, newToken->start, 1);
+                    printHelp(PRINT_HELP_LEXER_TITLE,"Allowed symbols: = , && || ! == != > < >= <= + - * / % ^ ( )");
                     break;
             }
         }

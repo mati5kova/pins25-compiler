@@ -20,10 +20,6 @@ int main(const int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    if (opts.verbose) {
-        fprintf(stderr, "Verbose mode ON\n");
-    }
-
     if (opts.n_inputs > 1) {
         fprintf(stderr, "Error: too many files to compile\n");
         print_usage(argv[0]);
