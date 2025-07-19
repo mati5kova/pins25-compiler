@@ -403,7 +403,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
             bool isKeyword = false;
             int keyIdentLen = 0;
 
-            while (isalnum(source[pos]) && source[pos] != '\0' && source[pos] != '\n') {
+            while ((isalnum(source[pos]) || source[pos] == '_') && source[pos] != '\0' && source[pos] != '\n') {
                 keyIdentBuffer[keyIdentLen++] = source[pos];
 
                 incPosition(&pos, &col);
@@ -673,7 +673,7 @@ void printTokens(Token** tokens) {
         }
 
         if (t->type == TOKEN_EOF) {
-            printf("Token[%3d] TOKEN_EOF", i);
+            printf("Token[%3d] TOKEN_EOF\n", i);
         } else {
             printf("Token[%3d] %-28s \"%.*s\"  (ln:%d, col:%d, pos:%d)\n",
                i,
