@@ -564,45 +564,6 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
     return tokens;
 }
 
-//
-// TokenStream funkcije
-//
-TokenStream* createTokenStream(Token** tokens, const int numOfTokens) {
-    TokenStream* ts = malloc(sizeof(TokenStream));
-    if (!ts) {
-        cleanupSourceBuffer();
-        cleanupTokens(tokens);
-        return NULL;
-    }
-
-    ts->tokens = tokens;
-    ts->numOfTokens = numOfTokens;
-    ts->index = 0;
-
-    return ts;
-}
-
-Token* nextToken(TokenStream* ts) {
-    if (ts->index >= ts->numOfTokens) {
-        return (ts->tokens)[ts->numOfTokens - 1];
-    }
-
-    return (ts->tokens)[ts->index++];
-}
-
-Token* peekToken(const TokenStream* ts) {
-    return (ts->tokens)[ts->index];
-}
-
-void rewindToken(TokenStream* ts) {
-    if (ts->index != 0) {
-        ts->index = ts->index - 1;
-    }
-}
-
-void freeTokenStream(TokenStream* ts) {
-    free(ts);
-}
 
 Token* createToken(const TokenType type, char* start, const int length, const int ln, const int col, const int pos) {
     Token* newToken = malloc(sizeof(Token));
