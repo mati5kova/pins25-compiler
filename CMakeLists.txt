@@ -12,4 +12,6 @@ add_executable(pins25_compiler src/main.c
         src/error_utils.c
         src/parser.c
         include/parser.h
+        include/ast.h
+        src/ast.c
 )
