@@ -1,0 +1,41 @@
+//
+// Created by Matevž Kovačič on 27. 7. 25.
+//
+
+#ifndef TOKEN_STREAM_H
+#define TOKEN_STREAM_H
+
+#include "./lexer.h"
+
+// wrapper struktura za seznam Token-ov
+typedef struct {
+    Token** tokens;
+    int     numOfTokens;
+    int     index;
+} TokenStream;
+
+// funkcija ustvari TokenStream iz outputa funkcije `tokenize`
+TokenStream* createTokenStream(Token** tokens, int numOfTokens);
+
+// funkcija vrne naslednji token in poveca index za +1
+// nikoli ne vrne NULL, ko je na koncu znova in znova vraca EOF token
+Token* consumeToken(TokenStream* ts);
+
+// funkcija vrne naslednji token ampak ne poveca index-a za +1
+Token* peekToken(const TokenStream* ts);
+
+// funkcija peeka token in primerja s pricakovanim,
+// token ustreta pricakovanemu ga consuma
+bool checkToken(TokenStream* ts, TokenType expectedType);
+
+// funkcija vrne token s trenutnim indeksom v token streamu
+Token* currentToken(const TokenStream* ts);
+
+// funkcija prevrti TokenStream za en Token nazaj
+void rewindToken(TokenStream* ts);
+
+// funkcija sprosti pomnilnik od TokenStream-a ne pa Token** tokens
+void freeTokenStream(TokenStream* ts);
+
+
+#endif //TOKEN_STREAM_H

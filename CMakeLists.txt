@@ -14,4 +14,6 @@ add_executable(pins25_compiler src/main.c
         include/parser.h
         include/ast.h
         src/ast.c
+        include/token_stream.h
+        src/token_stream.c
 )
