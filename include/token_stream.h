@@ -28,6 +28,11 @@ Token* peekToken(const TokenStream* ts);
 // token ustreta pricakovanemu ga consuma
 bool checkToken(TokenStream* ts, TokenType expectedType);
 
+// funkcija vrne prejsnji token v streamu
+// uporablja se npr. za assign tokena v ast node po uspesnem checkToken (ki sprozi consumeToken ob uspesnem checku)
+Token* prevCheckedToken(const TokenStream* ts);
+
+
 // funkcija vrne token s trenutnim indeksom v token streamu
 Token* currentToken(const TokenStream* ts);
 

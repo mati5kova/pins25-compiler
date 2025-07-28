@@ -44,12 +44,21 @@ bool checkToken(TokenStream* ts, const TokenType expectedType) {
     }
 }
 
+Token* prevCheckedToken(const TokenStream* ts) {
+    if (ts->index < 0)
+    {
+        return (ts->tokens)[0];
+    }
+
+    return (ts->tokens)[ts->index - 1];
+}
+
 Token* currentToken(const TokenStream* ts) {
     return (ts->tokens)[ts->index];
 }
 
 void rewindToken(TokenStream* ts) {
-    if (ts->index != 0) {
+    if (ts->index > 0) {
         ts->index = ts->index - 1;
     }
 }
