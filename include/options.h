@@ -13,6 +13,7 @@ typedef struct {
     bool     list_tokens_all;   // -a, --list-tokens-all
     bool     verbose;           // -v, --verbose
     bool     help;              // -h, --help
+    bool     ast;               // -t, --ast
     char   **input_files;       // positional args
     size_t   n_inputs;
 } Options;

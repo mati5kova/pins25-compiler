@@ -11,7 +11,8 @@ static struct option long_opts[] = {
     { "list-tokens-all", no_argument, 0, 'a' },
     { "verbose",         no_argument, 0, 'v' },
     { "help",            no_argument, 0, 'h' },
-    { 0,                 0,           0,  0  }
+    { "ast",             no_argument, 0, 't' },
+    { 0,                 0,           0, 0  }
 };
 
 void init_options(Options *opts) {
@@ -35,6 +36,9 @@ int parse_args(const int argc, char **argv, Options *opts) {
             case 'h':
                 opts->help = true;
                 break;
+            case 't':
+                opts->ast = true;
+                break;
             case '?':
             default:
                 return -1;
@@ -46,13 +50,14 @@ int parse_args(const int argc, char **argv, Options *opts) {
     return 0;
 }
 
-void print_usage(const char *prog) {
+void print_usage(const char* prog) {
     fprintf(stderr,
         "Usage: %s [options] <source-file>\n"
         "Options:\n"
-        "  -a, --list-tokens-all   Izpiše vse tokene iz vira\n"
-        "  -v, --verbose           Podrobnejši izpis ob napaki\n"
-        "  -h, --help              Ob napaki izpiši pravila jezika v povezavi z napako\n",
+        "  -a, --list-tokens-all   List all tokens from source\n"
+        "  -v, --verbose           Verbose error messages\n"
+        "  -h, --help              Recieve rules of the language upon error\n"
+        "      --ast               Output the abstract syntax tree of the program\n",
         prog
     );
 }
