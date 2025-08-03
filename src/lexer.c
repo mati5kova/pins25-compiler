@@ -205,7 +205,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                 newToken->type = TOKEN_CONSTANT_INT;
             } else {
                 passedLexicalAnalysis = false;
-                printError(fileName, "invalid numeric constant", ln, col, pos, newToken->start, lexemLength);
+                printLexerError(fileName, "invalid numeric constant", ln, col, pos, newToken->start, lexemLength);
                 if (hasLeadingZeros && opts->verbose) {
                     printVerboseInfo("numeric constant has leading zeros");
                 }
@@ -248,7 +248,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
             if (charConstTooLong) {
                 newToken->type = TOKEN_ERROR;
                 passedLexicalAnalysis = false;
-                printError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
+                printLexerError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
                 if (opts->verbose) {
                     printVerboseInfo("character constant is too long");
                 }
@@ -266,7 +266,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                             newToken->type = TOKEN_ERROR;
                             passedLexicalAnalysis = false;
                             isValidCharConstant = false;
-                            printError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
+                            printLexerError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
                             if (opts->verbose) {
                                 printVerboseInfo("invalid hexadecimal representation");
                             }
@@ -275,7 +275,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                         newToken->type = TOKEN_ERROR;
                         passedLexicalAnalysis = false;
                         isValidCharConstant = false;
-                        printError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
+                        printLexerError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
                         if (opts->verbose) {
                             printVerboseInfo("invalid combination of characters after '\\'");
                         }
@@ -289,7 +289,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                     passedLexicalAnalysis = false;
                     isValidCharConstant = false;
                     newToken->type = TOKEN_ERROR;
-                    printError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
+                    printLexerError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
                 }
             }
 
@@ -358,7 +358,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
 
             if (hasInvalidEscape || !terminated || hasInvalidHex) {
                 newToken->type = TOKEN_ERROR;
-                printError(fileName,"invalid string constant",ln,col, pos, newToken->start,len);
+                printLexerError(fileName,"invalid string constant",ln,col, pos, newToken->start,len);
 
                 if (opts->verbose) {
                     if (hasInvalidEscape) {
@@ -462,7 +462,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                 incPosition(&pos, &col);
                 newToken->length = 2;
             } else {
-                printError(fileName, "invalid logical operator", ln, col, pos, newToken->start, 2);
+                printLexerError(fileName, "invalid logical operator", ln, col, pos, newToken->start, 2);
                 passedLexicalAnalysis = false;
                 newToken->type = TOKEN_ERROR;
             }
@@ -472,7 +472,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                 newToken->type = TOKEN_SYMBOL_LOGICAL_OR;
                 newToken->length = 2;
             } else {
-                printError(fileName, "invalid logical operator", ln, col, pos, newToken->start, 2);
+                printLexerError(fileName, "invalid logical operator", ln, col, pos, newToken->start, 2);
                 passedLexicalAnalysis = false;
                 newToken->type = TOKEN_ERROR;
             }
@@ -542,7 +542,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                     incPosition(&pos, &col);
                     newToken->type = TOKEN_ERROR;
                     passedLexicalAnalysis = false;
-                    printError(fileName, "unknown symbol", ln, col, pos, newToken->start, 1);
+                    printLexerError(fileName, "unknown symbol", ln, col, pos, newToken->start, 1);
                     printHelp(PRINT_HELP_LEXER_TITLE,"Allowed symbols: = , && || ! == != > < >= <= + - * / % ^ ( )");
                     break;
             }
