@@ -90,7 +90,7 @@ void printAST(const ASTNode* node, const int indent) {
 
     // rekurzivno printamo otroke
     for (size_t i = 0; i < node->childCount; i++) {
-        printAST(node->children[i], indent + 2);
+        printAST(node->children[i], indent + 4);
     }
 }
 
@@ -98,8 +98,10 @@ const char* ASTNodeType_toString(const ASTNodeType type) {
     switch (type) {
     case AST_TEMP:          return "TEMP";
     case AST_ROOT:          return "ROOT";
+    case AST_DEF_LIST:      return "DEF_LIST";
     case AST_DEF_FUN:       return "DEF_FUN";
     case AST_DEF_VAR:       return "DEF_VAR";
+    case AST_INITS_LIST:    return "INITS_LIST";
     case AST_PARAM_LIST:    return "PARAM_LIST";
     case AST_ARG_LIST:      return "ARG_LIST";
     case AST_STMT_LIST:     return "STMT_LIST";

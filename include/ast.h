@@ -9,15 +9,14 @@
 #include "./lexer.h"
 
 typedef enum {
-    AST_TEMP,
-
     AST_ROOT,           // the root of the whole program
 
-    // definitions
+    AST_DEF_LIST,       // definitions
     AST_DEF_FUN,        // a “fun” definition
     AST_DEF_VAR,        // a “var” definition
 
     // lists
+    AST_INITS_LIST,
     AST_PARAM_LIST,     // comma‑separated function parameters
     AST_ARG_LIST,       // comma‑separated call arguments
     AST_STMT_LIST,      // comma‑separated statements
@@ -39,7 +38,9 @@ typedef enum {
     AST_IDENT,          // identifier reference
     AST_CONST_INT,      // integer literal
     AST_CONST_CHAR,     // char literal
-    AST_CONST_STRING    // string literal
+    AST_CONST_STRING,   // string literal
+
+    AST_TEMP
 } ASTNodeType;
 
 typedef struct ASTNode {
