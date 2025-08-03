@@ -3,6 +3,7 @@
 
 #include "../include/lexer.h"
 #include "../include/options.h"
+#include "../include/parser.h"
 
 int main(const int argc, char* argv[]) {
     FILE* in = NULL;
@@ -46,7 +47,14 @@ int main(const int argc, char* argv[]) {
     const int numOfTokens = retrieveTokenCount();
     const bool passedLexicalAnalysis = isLexicallyValid();
 
-    if (opts.list_tokens_all && passedLexicalAnalysis) {
+    if (!passedLexicalAnalysis)
+    {
+        cleanupSourceBuffer();
+        cleanupTokens(tokens);
+        return EXIT_FAILURE;
+    }
+
+    if (opts.list_tokens_all) {
         printTokens(tokens);
     }
 
@@ -55,6 +63,9 @@ int main(const int argc, char* argv[]) {
         fprintf(stderr, "Error creating token stream\n");
         return EXIT_FAILURE;
     }
+
+
+    parse(ts, &opts, opts.input_files[0]);
 
     // cleanup ce je bilo vse vredu
     cleanupSourceBuffer();
