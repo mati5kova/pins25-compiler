@@ -37,7 +37,7 @@ Token* prevCheckedToken(const TokenStream* ts);
 Token* currentToken(const TokenStream* ts);
 
 // funkcija prevrti TokenStream za en Token nazaj
-void rewindToken(TokenStream* ts);
+Token* rewindToken(TokenStream* ts);
 
 // funkcija sprosti pomnilnik od TokenStream-a ne pa Token** tokens
 void freeTokenStream(TokenStream* ts);

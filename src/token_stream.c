@@ -57,10 +57,11 @@ Token* currentToken(const TokenStream* ts) {
     return (ts->tokens)[ts->index];
 }
 
-void rewindToken(TokenStream* ts) {
+Token* rewindToken(TokenStream* ts) {
     if (ts->index > 0) {
         ts->index = ts->index - 1;
     }
+    return (ts->tokens)[ts->index];
 }
 
 void freeTokenStream(TokenStream* ts) {
