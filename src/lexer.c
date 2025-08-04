@@ -587,65 +587,82 @@ Token* createToken(const TokenType type, char* start, const int length, const in
 }
 
 
-void printTokens(Token** tokens) {
+static const char* tokenTypeToString(TokenType type) {
+    switch (type) {
+        case TOKEN_CONSTANT_INT:                     return "TOKEN_CONSTANT_INT";
+        case TOKEN_CONSTANT_CHAR:                    return "TOKEN_CONSTANT_CHAR";
+        case TOKEN_CONSTANT_STRING:                  return "TOKEN_CONSTANT_STRING";
+        case TOKEN_SYMBOL_ASSIGN:                    return "TOKEN_SYMBOL_ASSIGN";
+        case TOKEN_SYMBOL_COMMA:                     return "TOKEN_SYMBOL_COMMA";
+        case TOKEN_SYMBOL_LOGICAL_AND:               return "TOKEN_SYMBOL_LOGICAL_AND";
+        case TOKEN_SYMBOL_LOGICAL_OR:                return "TOKEN_SYMBOL_LOGICAL_OR";
+        case TOKEN_SYMBOL_LOGICAL_NOT:               return "TOKEN_SYMBOL_LOGICAL_NOT";
+        case TOKEN_SYMBOL_LOGICAL_EQUALS:            return "TOKEN_SYMBOL_LOGICAL_EQUALS";
+        case TOKEN_SYMBOL_LOGICAL_NOT_EQUALS:        return "TOKEN_SYMBOL_LOGICAL_NOT_EQUALS";
+        case TOKEN_SYMBOL_LOGICAL_GREATER:           return "TOKEN_SYMBOL_LOGICAL_GREATER";
+        case TOKEN_SYMBOL_LOGICAL_LESS:              return "TOKEN_SYMBOL_LOGICAL_LESS";
+        case TOKEN_SYMBOL_LOGICAL_GREATER_OR_EQUALS: return "TOKEN_SYMBOL_LOGICAL_GREATER_OR_EQUALS";
+        case TOKEN_SYMBOL_LOGICAL_LESS_OR_EQUALS:    return "TOKEN_SYMBOL_LOGICAL_LESS_OR_EQUALS";
+        case TOKEN_SYMBOL_ARITHMETIC_PLUS:           return "TOKEN_SYMBOL_ARITHMETIC_PLUS";
+        case TOKEN_SYMBOL_ARITHMETIC_MINUS:          return "TOKEN_SYMBOL_ARITHMETIC_MINUS";
+        case TOKEN_SYMBOL_ARITHMETIC_MULTIPLY:       return "TOKEN_SYMBOL_ARITHMETIC_MULTIPLY";
+        case TOKEN_SYMBOL_ARITHMETIC_DIVIDE:         return "TOKEN_SYMBOL_ARITHMETIC_DIVIDE";
+        case TOKEN_SYMBOL_ARITHMETIC_MOD:            return "TOKEN_SYMBOL_ARITHMETIC_MOD";
+        case TOKEN_SYMBOL_CARET:                     return "TOKEN_SYMBOL_CARET";
+        case TOKEN_SYMBOL_LEFT_PAREN:                return "TOKEN_SYMBOL_LEFT_PAREN";
+        case TOKEN_SYMBOL_RIGHT_PAREN:               return "TOKEN_SYMBOL_RIGHT_PAREN";
+        case TOKEN_IDENTIFIER:                       return "TOKEN_IDENTIFIER";
+        case TOKEN_KEYWORD_FUN:                      return "TOKEN_KEYWORD_FUN";
+        case TOKEN_KEYWORD_VAR:                      return "TOKEN_KEYWORD_VAR";
+        case TOKEN_KEYWORD_IF:                       return "TOKEN_KEYWORD_IF";
+        case TOKEN_KEYWORD_THEN:                     return "TOKEN_KEYWORD_THEN";
+        case TOKEN_KEYWORD_ELSE:                     return "TOKEN_KEYWORD_ELSE";
+        case TOKEN_KEYWORD_WHILE:                    return "TOKEN_KEYWORD_WHILE";
+        case TOKEN_KEYWORD_DO:                       return "TOKEN_KEYWORD_DO";
+        case TOKEN_KEYWORD_LET:                      return "TOKEN_KEYWORD_LET";
+        case TOKEN_KEYWORD_IN:                       return "TOKEN_KEYWORD_IN";
+        case TOKEN_KEYWORD_END:                      return "TOKEN_KEYWORD_END";
+        case TOKEN_ERROR:                            return "TOKEN_ERROR";
+        case TOKEN_EOF:                              return "TOKEN_EOF";
+        default:                                     return "UNKNOWN_TOKEN";
+    }
+}
+
+bool printTokens(Token** tokens, const bool outputToFile) {
     const int numOfTokens = retrieveTokenCount();
 
+    FILE* out = outputToFile ? fopen("tokens.txt", "w") : stdout;
+    if (outputToFile && !out) {
+        fprintf(stderr, "Error opening tokens.txt for writing\n");
+        return false;
+    }
+
+    char buf[256];
     for (int i = 0; i < numOfTokens; i++) {
         const Token* t = tokens[i];
+        const char* typeName = tokenTypeToString(t->type);
 
-        const char* typeName;
-        switch (t->type) {
-            case TOKEN_CONSTANT_INT:                        typeName = "TOKEN_CONSTANT_INT";                     break;
-            case TOKEN_CONSTANT_CHAR:                       typeName = "TOKEN_CONSTANT_CHAR";                    break;
-            case TOKEN_CONSTANT_STRING:                     typeName = "TOKEN_CONSTANT_STRING";                  break;
-            case TOKEN_SYMBOL_ASSIGN:                       typeName = "TOKEN_SYMBOL_ASSIGN";                    break;
-            case TOKEN_SYMBOL_COMMA:                        typeName = "TOKEN_SYMBOL_COMMA";                     break;
-            case TOKEN_SYMBOL_LOGICAL_AND:                  typeName = "TOKEN_SYMBOL_LOGICAL_AND";               break;
-            case TOKEN_SYMBOL_LOGICAL_OR:                   typeName = "TOKEN_SYMBOL_LOGICAL_OR";                break;
-            case TOKEN_SYMBOL_LOGICAL_NOT:                  typeName = "TOKEN_SYMBOL_LOGICAL_NOT";               break;
-            case TOKEN_SYMBOL_LOGICAL_EQUALS:               typeName = "TOKEN_SYMBOL_LOGICAL_EQUALS";            break;
-            case TOKEN_SYMBOL_LOGICAL_NOT_EQUALS:           typeName = "TOKEN_SYMBOL_LOGICAL_NOT_EQUALS";        break;
-            case TOKEN_SYMBOL_LOGICAL_GREATER:              typeName = "TOKEN_SYMBOL_LOGICAL_GREATER";           break;
-            case TOKEN_SYMBOL_LOGICAL_LESS:                 typeName = "TOKEN_SYMBOL_LOGICAL_LESS";              break;
-            case TOKEN_SYMBOL_LOGICAL_GREATER_OR_EQUALS:    typeName = "TOKEN_SYMBOL_LOGICAL_GREATER_OR_EQUALS"; break;
-            case TOKEN_SYMBOL_LOGICAL_LESS_OR_EQUALS:       typeName = "TOKEN_SYMBOL_LOGICAL_LESS_OR_EQUALS";    break;
-            case TOKEN_SYMBOL_ARITHMETIC_PLUS:              typeName = "TOKEN_SYMBOL_ARITHMETIC_PLUS";           break;
-            case TOKEN_SYMBOL_ARITHMETIC_MINUS:             typeName = "TOKEN_SYMBOL_ARITHMETIC_MINUS";          break;
-            case TOKEN_SYMBOL_ARITHMETIC_MULTIPLY:          typeName = "TOKEN_SYMBOL_ARITHMETIC_MULTIPLY";       break;
-            case TOKEN_SYMBOL_ARITHMETIC_DIVIDE:            typeName = "TOKEN_SYMBOL_ARITHMETIC_DIVIDE";         break;
-            case TOKEN_SYMBOL_ARITHMETIC_MOD:               typeName = "TOKEN_SYMBOL_ARITHMETIC_MOD";            break;
-            case TOKEN_SYMBOL_CARET:                        typeName = "TOKEN_SYMBOL_CARET";                     break;
-            case TOKEN_SYMBOL_LEFT_PAREN:                   typeName = "TOKEN_SYMBOL_LEFT_PAREN";                break;
-            case TOKEN_SYMBOL_RIGHT_PAREN:                  typeName = "TOKEN_SYMBOL_RIGHT_PAREN";               break;
-            case TOKEN_IDENTIFIER:                          typeName = "TOKEN_IDENTIFIER";                       break;
-            case TOKEN_KEYWORD_FUN:                         typeName = "TOKEN_KEYWORD_FUN";                      break;
-            case TOKEN_KEYWORD_VAR:                         typeName = "TOKEN_KEYWORD_VAR";                      break;
-            case TOKEN_KEYWORD_IF:                          typeName = "TOKEN_KEYWORD_IF";                       break;
-            case TOKEN_KEYWORD_THEN:                        typeName = "TOKEN_KEYWORD_THEN";                     break;
-            case TOKEN_KEYWORD_ELSE:                        typeName = "TOKEN_KEYWORD_ELSE";                     break;
-            case TOKEN_KEYWORD_WHILE:                       typeName = "TOKEN_KEYWORD_WHILE";                    break;
-            case TOKEN_KEYWORD_DO:                          typeName = "TOKEN_KEYWORD_DO";                       break;
-            case TOKEN_KEYWORD_LET:                         typeName = "TOKEN_KEYWORD_LET";                      break;
-            case TOKEN_KEYWORD_IN:                          typeName = "TOKEN_KEYWORD_IN";                       break;
-            case TOKEN_KEYWORD_END:                         typeName = "TOKEN_KEYWORD_END";                      break;
-            case TOKEN_ERROR:                               typeName = "TOKEN_ERROR";                            break;
-            case TOKEN_EOF:                                 typeName = "TOKEN_EOF";                              break;
-            default:                                        typeName = "UNKNOWN_TOKEN";                          break;
+        int n = snprintf(buf, sizeof buf, "Token[%3d] %-28s \"%.*s\"  (ln:%d, col:%d, pos:%d)\n",
+            i,
+            typeName,
+            t->length, t->start,
+            t->location->ln,
+            t->location->col,
+            t->location->pos
+        );
+        if (n < 0) {
+            fprintf(stderr, "Formatting error on token %d\n", i);
+            return false;
         }
 
-        if (t->type == TOKEN_EOF) {
-            printf("Token[%3d] TOKEN_EOF\n", i);
-        } else {
-            printf("Token[%3d] %-28s \"%.*s\"  (ln:%d, col:%d, pos:%d)\n",
-               i,
-               typeName,
-               t->length,
-               t->start,
-               t->location->ln,
-               t->location->col,
-               t->location->pos);
-        }
+        fputs(buf, out);
     }
+
+    if (outputToFile) {
+        fclose(out);
+    }
+
+    return true;
 }
 
 void cleanupTokens(Token** tokens) {

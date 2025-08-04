@@ -56,7 +56,7 @@ void print_usage(const char* prog) {
     fprintf(stderr,
         "Usage: %s [options] <source-file>\n"
         "Options:\n"
-        "  -l, --list-tokens-all   List all tokens from source\n"
+        "  -l, --list-tokens-all   Output tokens from source file into `tokens.txt`\n"
         "  -v, --verbose           Verbose error messages\n"
         "  -h, --help              Recieve rules of the language upon error\n"
         "  -a, --ast               Output the abstract syntax tree of the program\n",

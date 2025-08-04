@@ -85,7 +85,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName);
 Token* createToken(TokenType type, char* start, int length, int ln, int col, int pos);
 
 // funkcija izpise vse tokene v berljiv obliki
-void printTokens(Token** tokens);
+bool printTokens(Token** tokens, bool outputToFile);
 
 // funkcija sprosti pomnilnik ki ga zasede vsebina vhodne datoteke shranjena kot char*
 void cleanupSourceBuffer();

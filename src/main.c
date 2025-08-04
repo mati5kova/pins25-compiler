@@ -55,7 +55,12 @@ int main(const int argc, char* argv[]) {
     }
 
     if (opts.list_tokens_all) {
-        printTokens(tokens);
+        if (!printTokens(tokens,true))
+        {
+            cleanupSourceBuffer();
+            cleanupTokens(tokens);
+            return EXIT_FAILURE;
+        }
     }
 
     TokenStream* ts = createTokenStream(tokens, numOfTokens);
