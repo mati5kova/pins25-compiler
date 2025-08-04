@@ -121,6 +121,7 @@ ParseResult parse_individual_definition(const bool expectNonDefinitionTokensToFo
         return PR_NO_MATCH;
     }
 
+    printSyntaxError(fileName, "incorrect definition", currentToken(local_ts)); // ujame npr. ime = ime = ime,
     return PR_ERR_NULL;
 }
 
