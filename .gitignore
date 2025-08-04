@@ -2,3 +2,4 @@
 /cmake-build-debug/
 .gitignore.un~
 .DS_Store
+/build/
