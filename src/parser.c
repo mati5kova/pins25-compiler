@@ -122,7 +122,6 @@ ParseResult parse_individual_definition(const bool expectNonDefinitionTokensToFo
     }
 
     return PR_ERR_NULL;
-
 }
 
 ParseResult parse_fun_def() {
@@ -597,37 +596,9 @@ ParseResult parse_expression(const int precedence) {
         case TOKEN_IDENTIFIER: {
             token = consumeToken(local_ts);
 
-            // klic funkcije ne pa spremenljivka
-            if (checkToken(local_ts, TOKEN_SYMBOL_LEFT_PAREN))
-            {
-                const ParseResult optArgs = parse_arguments();
-                if (optArgs.status != PS_OK)
-                {
-                    printSyntaxError(fileName, "incorrect function call", prevCheckedToken(local_ts));
-                    // TODO verbose:
+            lhs = newASTNode(AST_IDENT, token);
+            if (!lhs) return PR_ERR_NULL;
 
-                    parsingSuccessfull = false;
-                    return PR_ERR_NULL;
-                }
-
-                if (!checkToken(local_ts, TOKEN_SYMBOL_RIGHT_PAREN))
-                {
-                    printSyntaxError(fileName, "incorrect function call", prevCheckedToken(local_ts));
-                    // TODO verbose: missing ) after `identifier(arguments `
-
-                    parsingSuccessfull = false;
-                    return PR_ERR_NULL;
-                }
-
-                lhs = newASTNode(AST_EXPR_CALL, token);
-                if (!lhs) { return PR_ERR_NULL; }
-
-                appendASTNode(lhs, optArgs.node);
-            } else
-            {
-                lhs = newASTNode(AST_IDENT, token);
-                if (!lhs) { return PR_ERR_NULL; }
-            }
             break;
         }
         case TOKEN_CONSTANT_INT:
@@ -646,8 +617,10 @@ ParseResult parse_expression(const int precedence) {
         case TOKEN_SYMBOL_LEFT_PAREN: {
             token = consumeToken(local_ts);
             const ParseResult innerExpression = parse_expression(getPrecedence(token->type, true));
+
             if (innerExpression.status != PS_OK || !checkToken(local_ts, TOKEN_SYMBOL_RIGHT_PAREN))
             {
+                printSyntaxError(fileName, "mismatched parentheses", peekToken(local_ts));
                 parsingSuccessfull = false;
                 return PR_ERR_NULL;
             }
@@ -656,35 +629,75 @@ ParseResult parse_expression(const int precedence) {
 
             break;
         }
-        case TOKEN_SYMBOL_RIGHT_PAREN: {
-            // zelo grd fix ampak prepreci da bi ... nameOfVar(((()))) bil valid
-            // dopusti da se vrne prazen samo ce je to klic funkcije ker prazen expression ni dovoljen v sintaksnih pravilih
-            const Token* beforeLeftParen = rewindToken(local_ts);//dobimo token pred levim oklepajem
-            consumeToken(local_ts); // takoj prevrtimo nazaj v stanje kot je bilo na zacetku tega klica funkcije
-
-            if (prevCheckedToken(local_ts)->type == TOKEN_SYMBOL_LEFT_PAREN && beforeLeftParen->type == TOKEN_IDENTIFIER)
-            {
-                // za npr. nameOfVar = `func()`, nameOfVar = nameOfVar, nameOfVar
-                // ne sme pridt do default casa ker se "(" in ")" consumata en(1) case zgoraj v case TOKEN_SYMBOL_LEFT_PAREN
-                return PR_OK(NULL);
-            }
-            break;
-        }
         default:
-            printf("incorrect prefix expression %.*s\n", token->length, token->start);
-
-            //rewindToken(local_ts);
             parsingSuccessfull = false;
             return PR_ERR_NULL;
     }
 
-    // infix in postfix expression
+    // function call, postfix expression, binary expression
     while (true)
     {
+        // spremenjeno po INTCONST() napaki
+        if (checkToken(local_ts, TOKEN_SYMBOL_LEFT_PAREN)) {
+            // edina dovoljena oblika je IDENTIFIER()
+            if (lhs->type != AST_IDENT) {
+                printSyntaxError(fileName, "invalid function call", prevCheckedToken(local_ts));
+                parsingSuccessfull = false;
+                return PR_ERR_NULL;
+            }
+
+            // arg-list node ki ga pripnemo function callu kot drugi node
+            ASTNode* argsList = newASTNode(AST_ARG_LIST, NULL);
+            if (!argsList) { return PR_ERR_NULL; }
+
+            // ce ni takoj zaklepaja parsaj naprej argumente
+            if (peekToken(local_ts)->type != TOKEN_SYMBOL_RIGHT_PAREN) {
+                // prvi argument
+                const ParseResult arg = parse_expression(0);
+                if (arg.status != PS_OK) {
+                    printSyntaxError(fileName, "incorrect argument in function call", prevCheckedToken(local_ts));
+                    parsingSuccessfull = false;
+                    return PR_ERR_NULL;
+                }
+                appendASTNode(argsList, arg.node);
+
+                // naslednji argumenti
+                while (checkToken(local_ts, TOKEN_SYMBOL_COMMA)) {
+                    const ParseResult more = parse_expression(0);
+                    if (more.status != PS_OK) {
+                        printSyntaxError(fileName, "incorrect argument after comma", prevCheckedToken(local_ts));
+                        parsingSuccessfull = false;
+                        return PR_ERR_NULL;
+                    }
+                    appendASTNode(argsList, more.node);
+                }
+            }
+
+            // nujen je zaklepaj od function call-a
+            if (!checkToken(local_ts, TOKEN_SYMBOL_RIGHT_PAREN)) {
+                //TODO --verbose: possibly missing ")" / incorrect arguments
+                // testiraj z fun i(ena)= ime = ena(1==1=2)
+                printSyntaxError(fileName, "invalid function call", peekToken(local_ts));
+                parsingSuccessfull = false;
+                return PR_ERR_NULL;
+            }
+
+            // function call node
+            ASTNode* funcCallNode = newASTNode(AST_EXPR_CALL, NULL); // daj lhs->token ce hoces da ima EXPR_CALL identifier kot token
+            if (!funcCallNode) { return PR_ERR_NULL; }
+
+            appendASTNode(funcCallNode, lhs); // identifier
+            appendASTNode(funcCallNode, argsList); // arg-list
+
+            lhs = funcCallNode;
+
+            // preskocimo spodnji del
+            continue;
+        }
+
         Token* operator = peekToken(local_ts);
 
         const int opPrecedence = getPrecedence(operator->type, false);
-
         if (opPrecedence <= precedence) { break; }
 
         operator = consumeToken(local_ts);
