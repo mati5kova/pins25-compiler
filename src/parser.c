@@ -811,9 +811,7 @@ ParseResult parse_initializers() {
         appendASTNode(initsList, firstInit.node);
     } else
     {
-        // TODO
-        // error message da to niso dovoljeni initializerji
-        printf("incorrect initializers (first initializer)\n");
+        // TODO verbose: mogoce?? printf("incorrect initializers (first initializer)\n");
 
         parsingSuccessfull = false;
         freeAST(initsList);
@@ -843,7 +841,7 @@ ParseResult parse_individual_initializer(const bool isFirstInitializer) {
 
     const ParseResult left = parse_constant();
 
-    if (left.status == PS_NO_MATCH) {
+    if (left.status == PS_NO_MATCH || left.status == PS_EOF) {
         if (isFirstInitializer)
         {
             return PR_OK(left.node);
