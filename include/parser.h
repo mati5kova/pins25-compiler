@@ -60,10 +60,12 @@ ParseResult parse_arguments();
 
 ParseResult parse_individual_argument();
 
-// TODO return tip
-void parse(const TokenStream* inputTokenStream, Options* opts, const char* inputFileName);;
+ASTNode* parse(const TokenStream* inputTokenStream, Options* opts, const char* inputFileName);;
 
 // funkcija vrne precedence za nek operator
 int getPrecedence(TokenType type, bool isPrefix);
+
+// vrne true | false glede na to ali je bil parsing uspesen
+bool passedSyntaxAnalysis();
 
 #endif //PARSER_H

@@ -20,27 +20,23 @@ TokenStream* local_ts;
 
 const char* fileName;
 
-static bool parsingSuccessfull = true;
+bool parsingSuccessfull = true;
 
 // funkcija vrne true | false glede na to ali je naslednji token == TOKEN_EOF (peekToken)
 static bool isEOFNext();
 
-void parse(const TokenStream* inputTokenStream, Options* opts, const char* inputFileName) {
+ASTNode* parse(const TokenStream* inputTokenStream, Options* opts, const char* inputFileName) {
     fileName = inputFileName;
     local_ts = (TokenStream*) inputTokenStream;
 
-    const ParseResult parseRes = parse_program();
+    const ParseResult parsedRootNode = parse_program();
 
-    if (parseRes.status == PS_OK && parsingSuccessfull)
+    if (parsedRootNode.status == PS_OK && parsingSuccessfull)
     {
-        printf("Parsing successfull\n");
-        printAST(parseRes.node, 0);
-    } else
-    {
-        printf("Parsing failed\n");
+        return parsedRootNode.node; // root node
     }
 
-    freeAST(parseRes.node);
+    return NULL;
 }
 
 ParseResult parse_program() {
@@ -427,7 +423,7 @@ ParseResult parse_individual_statement() {
         const ParseResult secondExpression = parse_expression(0);
         if (secondExpression.status != PS_OK)
         {
-            freeAST(loneExpression.node);
+            freeAST(statementNode);
             return PR_ERR_NULL;
         }
 
@@ -692,7 +688,9 @@ ParseResult parse_expression(const int precedence) {
             // edina dovoljena oblika je IDENTIFIER()
             if (lhs->type != AST_IDENT) {
                 printSyntaxError(fileName, "invalid function call", prevCheckedToken(local_ts));
+
                 parsingSuccessfull = false;
+                freeAST(lhs);
                 return PR_ERR_NULL;
             }
 
@@ -706,7 +704,9 @@ ParseResult parse_expression(const int precedence) {
                 const ParseResult arg = parse_expression(0);
                 if (arg.status != PS_OK) {
                     printSyntaxError(fileName, "incorrect argument in function call", prevCheckedToken(local_ts));
+
                     parsingSuccessfull = false;
+                    freeAST(lhs);
                     return PR_ERR_NULL;
                 }
                 appendASTNode(argsList, arg.node);
@@ -715,8 +715,12 @@ ParseResult parse_expression(const int precedence) {
                 while (checkToken(local_ts, TOKEN_SYMBOL_COMMA)) {
                     const ParseResult more = parse_expression(0);
                     if (more.status != PS_OK) {
+                        //TODO verbose: mogoce spodnji msg samo v verbose
                         printSyntaxError(fileName, "incorrect argument after comma", prevCheckedToken(local_ts));
+
                         parsingSuccessfull = false;
+                        freeAST(argsList);
+                        freeAST(lhs);
                         return PR_ERR_NULL;
                     }
                     appendASTNode(argsList, more.node);
@@ -728,7 +732,10 @@ ParseResult parse_expression(const int precedence) {
                 //TODO --verbose: possibly missing ")" / incorrect arguments
                 // testiraj z fun i(ena)= ime = ena(1==1=2)
                 printSyntaxError(fileName, "invalid function call", prevCheckedToken(local_ts));
+
                 parsingSuccessfull = false;
+                freeAST(argsList);
+                freeAST(lhs);
                 return PR_ERR_NULL;
             }
 
@@ -770,25 +777,25 @@ ParseResult parse_expression(const int precedence) {
         {
             // binary
             const ParseResult rhs = parse_expression(opPrecedence);
-            if (rhs.status == PS_OK)
-            {
-                node = newASTNode(AST_EXPR_BINARY, operator);
-                if (!node)
-                {
-                    freeAST(lhs);
-                    return PR_ERR_NULL;
-                }
-
-                appendASTNode(node, lhs);
-                appendASTNode(node, rhs.node);
-                lhs = node;
-            } else
+            if (rhs.status != PS_OK)
             {
                 //TODO  verbose: mogoce?? printf("incorrect postfix/infix expression\n");
 
                 parsingSuccessfull = false;
+                freeAST(lhs);
                 return PR_ERR_NULL;
             }
+
+            node = newASTNode(AST_EXPR_BINARY, operator);
+            if (!node)
+            {
+                freeAST(lhs);
+                return PR_ERR_NULL;
+            }
+
+            appendASTNode(node, lhs);
+            appendASTNode(node, rhs.node);
+            lhs = node;
         }
     }
 
@@ -990,4 +997,8 @@ int getPrecedence(const TokenType type, const bool isPrefix) {
 
 static bool isEOFNext() {
     return peekToken(local_ts)->type == TOKEN_EOF;
+}
+
+bool passedSyntaxAnalysis() {
+    return parsingSuccessfull;
 }

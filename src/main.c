@@ -4,6 +4,7 @@
 #include "../include/lexer.h"
 #include "../include/options.h"
 #include "../include/parser.h"
+#include "../include/ast.h"
 
 int main(const int argc, char* argv[]) {
     FILE* in = NULL;
@@ -70,12 +71,29 @@ int main(const int argc, char* argv[]) {
     }
 
 
-    parse(ts, &opts, opts.input_files[0]);
+    ASTNode* rootNode = parse(ts, &opts, opts.input_files[0]);
+    const bool parsingSuccessfull = passedSyntaxAnalysis();
+
+    if (!rootNode || !parsingSuccessfull)
+    {
+        fprintf(stderr, "Parsing failed");
+
+        cleanupSourceBuffer();
+        cleanupTokens(tokens);
+        freeTokenStream(ts);
+        return EXIT_FAILURE;
+    }
+
+    if (opts.ast)
+    {
+        printAST(rootNode, 0);
+    }
 
     // cleanup ce je bilo vse vredu
     cleanupSourceBuffer();
     cleanupTokens(tokens);
     freeTokenStream(ts);
+    freeAST(rootNode);
 
     return EXIT_SUCCESS;
 }
