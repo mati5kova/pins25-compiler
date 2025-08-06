@@ -257,9 +257,9 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                     if ((character[1] == 'n' || character[1] == '\\' || character[1] == '\'') && characterLength == 2) {
                         // [\n]   [\']  [\\]
                         newToken->type = TOKEN_CONSTANT_CHAR;
-                    } else if (ishexnumber(character[1]) && characterLength == 3) {
+                    } else if (isxdigit(character[1]) && characterLength == 3) {
                         // [\f?]
-                        if (ishexnumber(character[2])) {
+                        if (isxdigit(character[2])) {
                             // [\ff]
                             newToken->type = TOKEN_CONSTANT_CHAR;
                         } else {
@@ -328,8 +328,10 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                     // simple escapes \n, \\, \", \'
                     if (pos + 1 < numberOfInputChars && (source[pos + 1] == 'n' || source[pos + 1] == '\\' || source[pos + 1] == '"' || source[pos + 1] == '\'')) {
                         // vredu
-                    } else if (pos + 2 < numberOfInputChars && ishexnumber(source[pos + 1])) {
-                        if (ishexnumber(source[pos + 2])) {
+                        incPosition(&pos, &col);
+                        len++;
+                    } else if (pos + 2 < numberOfInputChars && isxdigit(source[pos + 1])) {
+                        if (isxdigit(source[pos + 2])) {
                             // vredu
                         } else {
                             hasInvalidHex = true;
@@ -340,11 +342,17 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                     }
                 }
 
-                if (source[pos] == '"' && source[pos - 1] != '\\' && !firstChar) {
+                int backslashCount = 0;
+                for (int i = pos - 1; i >= 0 && source[i] == '\\'; --i) {
+                    backslashCount++;
+                }
+
+                if (source[pos] == '"' && (backslashCount % 2) == 0 && !firstChar) {
                     terminated = true;
                     len++; // odstrani ce noces zadnjega " v lexemu + bool firstChar
                     break;
                 }
+
                 firstChar = false;
                 incPosition(&pos, &col);
                 len++;
