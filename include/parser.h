@@ -52,7 +52,7 @@ ParseResult parse_expression(int precedence);
 
 ParseResult parse_initializers();
 
-ParseResult parse_individual_initializer();
+ParseResult parse_individual_initializer(bool isFirstInitializer);
 
 ParseResult parse_constant();
 

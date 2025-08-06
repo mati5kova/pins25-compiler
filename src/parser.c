@@ -817,9 +817,12 @@ ParseResult parse_initializers() {
     if (!initsList) { return PR_ERR_NULL; }
 
     // .status == PS_EOF ni mozen (beri zgoraj)
-    const ParseResult firstInit = parse_individual_initializer();
+    const ParseResult firstInit = parse_individual_initializer(true);
 
-    if (firstInit.status != PS_OK)
+    if (firstInit.status == PS_OK)
+    {
+        appendASTNode(initsList, firstInit.node);
+    } else
     {
         // TODO
         // error message da to niso dovoljeni initializerji
@@ -830,15 +833,13 @@ ParseResult parse_initializers() {
         return PR_ERR_NULL;
     }
 
-    appendASTNode(initsList, firstInit.node);
-
     while (checkToken(local_ts, TOKEN_SYMBOL_COMMA))
     {
-        const ParseResult res = parse_individual_initializer();
+        const ParseResult res = parse_individual_initializer(false);
 
         if (res.status != PS_OK)
         {
-            printf("incorrect initializers after first initializer\n");
+            printSyntaxError(fileName, "invalid initializer(s)", prevCheckedToken(local_ts));
 
             parsingSuccessfull = false;
             freeAST(initsList);
@@ -851,13 +852,18 @@ ParseResult parse_initializers() {
     return PR_OK(initsList);
 }
 
-ParseResult parse_individual_initializer() {
+ParseResult parse_individual_initializer(const bool isFirstInitializer) {
 
     const ParseResult left = parse_constant();
 
     if (left.status == PS_NO_MATCH) {
+        if (isFirstInitializer)
+        {
+            return PR_OK(left.node);
+        }
+
         freeAST(left.node);
-        return PR_NO_MATCH; //NULL
+        return PR_NO_MATCH;
     }
 
     if (left.status == PS_ERROR)
@@ -872,7 +878,8 @@ ParseResult parse_individual_initializer() {
         if (!( left.node->type == AST_CONST_INT
             || (left.node->type == AST_EXPR_PREFIX && left.node->children[0]->type == AST_CONST_INT) ))
         {
-            printf("incorrect initializer; allowed: (INTCONST *)? const\n");
+            //TODO verbose: printf("incorrect initializer; allowed: (INTCONST *)? const\n");
+            printSyntaxError(fileName, "invalid initializer", prevCheckedToken(local_ts));
 
             parsingSuccessfull = false;
             freeAST(left.node);
@@ -909,20 +916,23 @@ ParseResult parse_constant() {
         isSigned = true;
         signTok  = consumeToken(local_ts);
         if (isEOFNext()) {
-            printf("lone sign as constant in invalid\n");
+            //TODO verbose: printf("lone sign as constant in invalid\n");
+            printSyntaxError(fileName, "invalid constant", prevCheckedToken(local_ts));
+
+            parsingSuccessfull = false;
             return PR_ERR_NULL;
         }
     }
 
     // peek za dejanski const token
     tok = peekToken(local_ts);
-    ASTNode* node = NULL;
+    ASTNode* constNode = NULL;
 
     switch (tok->type) {
       case TOKEN_CONSTANT_INT:
         consumeToken(local_ts);
-        node = newASTNode(AST_CONST_INT, tok);
-        if (!node) { return PR_ERR_NULL; }
+        constNode = newASTNode(AST_CONST_INT, tok);
+        if (!constNode) { return PR_ERR_NULL; }
 
         break;
 
@@ -930,14 +940,15 @@ ParseResult parse_constant() {
       case TOKEN_CONSTANT_STRING:
         // stringi in chari niso predznaceni
         if (isSigned) {
-            printf("invalid constant. char and string constants cannot be signed\n");
+            printSyntaxError(fileName, "invalid constant", prevCheckedToken(local_ts));
+            //TODO verbose; printf("invalid constant. char and string constants cannot be signed\n");
 
             parsingSuccessfull = false;
             return PR_ERR_NULL;
         }
         tok = consumeToken(local_ts);
-        node = newASTNode(tok->type == TOKEN_CONSTANT_CHAR ? AST_CONST_CHAR : AST_CONST_STRING, tok);
-        if (!node) { return PR_ERR_NULL; }
+        constNode = newASTNode(tok->type == TOKEN_CONSTANT_CHAR ? AST_CONST_CHAR : AST_CONST_STRING, tok);
+        if (!constNode) { return PR_ERR_NULL; }
 
         break;
 
@@ -952,15 +963,15 @@ ParseResult parse_constant() {
         ASTNode* prefix = newASTNode(AST_EXPR_PREFIX, signTok);
         if (!prefix)
         {
-            freeAST(node);
+            freeAST(constNode);
             return PR_ERR_NULL;
         }
 
-        appendASTNode(prefix, node);
+        appendASTNode(prefix, constNode);
         return PR_OK(prefix);
     }
 
-    return PR_OK(node);
+    return PR_OK(constNode);
 }
 
 int getPrecedence(const TokenType type, const bool isPrefix) {
