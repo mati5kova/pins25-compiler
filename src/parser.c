@@ -53,12 +53,15 @@ ParseResult parse_program() {
 
     if (parsedDefinitions.status != PS_OK)
     {
+        freeAST(root);
         return PR_ERR_NULL;
     }
 
     if (parsedDefinitions.node->childCount < 1)
     {
         printf("definition required");
+
+        freeAST(root);
         return PR_ERR_NULL;
     }
 
@@ -816,30 +819,33 @@ ParseResult parse_initializers() {
     // .status == PS_EOF ni mozen (beri zgoraj)
     const ParseResult firstInit = parse_individual_initializer();
 
-    if (firstInit.status == PS_OK)
-    {
-        appendASTNode(initsList, firstInit.node);
-    } else
+    if (firstInit.status != PS_OK)
     {
         // TODO
         // error message da to niso dovoljeni initializerji
         printf("incorrect initializers (first initializer)\n");
+
+        parsingSuccessfull = false;
+        freeAST(initsList);
         return PR_ERR_NULL;
     }
 
+    appendASTNode(initsList, firstInit.node);
+
     while (checkToken(local_ts, TOKEN_SYMBOL_COMMA))
     {
-        ParseResult res;
-        if ((res = parse_individual_initializer()).status == PS_OK)
+        const ParseResult res = parse_individual_initializer();
+
+        if (res.status != PS_OK)
         {
-            appendASTNode(initsList, res.node);
-        } else
-        {
+            printf("incorrect initializers after first initializer\n");
+
             parsingSuccessfull = false;
             freeAST(initsList);
-            printf("incorrect initializers after first initializer\n");
             return PR_ERR_NULL;
         }
+
+        appendASTNode(initsList, res.node);
     }
 
     return PR_OK(initsList);
@@ -850,7 +856,8 @@ ParseResult parse_individual_initializer() {
     const ParseResult left = parse_constant();
 
     if (left.status == PS_NO_MATCH) {
-        return PR_OK(left.node); //NULL
+        freeAST(left.node);
+        return PR_NO_MATCH; //NULL
     }
 
     if (left.status == PS_ERROR)

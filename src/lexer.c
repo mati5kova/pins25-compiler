@@ -11,11 +11,9 @@
 #include "../include/error_utils.h"
 #include "../include/lexer.h"
 
-#define INITIAL_TOKEN_COUNT 200                         // zacetno stevilo tokenov
-#define TOKEN_COUNT_INCREMENT 100                       // increment za stevilo tokenov
+#define INITIAL_TOKEN_COUNT 100                         // zacetno stevilo tokenov
 
 #define INITIAL_BUFFER_SIZE 500                         // zacetna velikost source bufferja
-#define BUFFER_SIZE_INCREMENT 250                       // increment za source buffer
 
 #define MAX_IDENTIFIER_LENGTH 64                        // maksimalna dolzina za imena spremenljivk (63 znakov + \0)
 
@@ -85,14 +83,14 @@ char* stringifyInputFile(FILE* inputFile) {
         }
 
         if (numberOfInputChars + 1 >= currentMaxBufferSIze) {
-            char* temp = realloc(buffer, currentMaxBufferSIze + BUFFER_SIZE_INCREMENT);
+            char* temp = realloc(buffer, currentMaxBufferSIze * 2);
             if (!temp) {
                 free(buffer);
                 return NULL;
             }
             buffer = temp;
 
-            currentMaxBufferSIze += BUFFER_SIZE_INCREMENT;
+            currentMaxBufferSIze *= 2;
         }
 
         buffer[numberOfInputChars] = (char) c;
@@ -135,7 +133,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
     // glavni loop ki gre skozi vse znake source bufferja
     while (source[pos] != '\0' && pos < numberOfInputChars) {
         if (tokenCount + 1 >= maxNumberOfTokensInBuffer) {
-            maxNumberOfTokensInBuffer += TOKEN_COUNT_INCREMENT;
+            maxNumberOfTokensInBuffer *= 2;
             Token** temp = realloc(tokens, maxNumberOfTokensInBuffer * sizeof(Token*));
             if (!temp) {
                 cleanupTokens(tokens);
