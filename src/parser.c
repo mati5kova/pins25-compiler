@@ -57,6 +57,7 @@ ParseResult parse_program() {
         return PR_ERR_NULL;
     }
 
+    // do tega naj ne bi nikoli prislo
     if (parsedDefinitions.node->childCount < 1)
     {
         printf("definition required");
@@ -124,12 +125,19 @@ ParseResult parse_individual_definition(const bool expectNonDefinitionTokensToFo
         return PR_NO_MATCH;
     }
 
-    printSyntaxError(fileName, "incorrect definition", currentToken(local_ts)); // ujame npr. ime = ime = ime,
+    printSyntaxError(fileName, "invalid definition", currentToken(local_ts)); // ujame npr. ime = ime = ime,
+    parsingSuccessfull = false;
     return PR_ERR_NULL;
 }
 
 ParseResult parse_fun_def() {
-    if (isEOFNext()) { return PR_EOF; }
+    if (isEOFNext())
+    {
+        printSyntaxError(fileName, "invalid definition", prevCheckedToken(local_ts));
+        //TODO verbose: missing `identifier(parameters) = statements` after `fun`
+
+        return PR_EOF;
+    }
 
     ASTNode* funNode = newASTNode(AST_DEF_FUN, peekToken(local_ts)); // pricakovano je peekek token identifer
     if (!funNode) { return PR_ERR_NULL; }
@@ -146,7 +154,7 @@ ParseResult parse_fun_def() {
 
     if (!checkToken(local_ts, TOKEN_SYMBOL_LEFT_PAREN))
     {
-        printSyntaxError(fileName, "incorrect function declaration", peekToken(local_ts));
+        printSyntaxError(fileName, "invalid function declaration", peekToken(local_ts));
         // TODO verbose: missing ( after `var identifer`
 
         parsingSuccessfull = false;
@@ -165,7 +173,7 @@ ParseResult parse_fun_def() {
 
     if (!checkToken(local_ts, TOKEN_SYMBOL_RIGHT_PAREN))
     {
-        printSyntaxError(fileName, "incorrect function declaration", peekToken(local_ts));
+        printSyntaxError(fileName, "invalid function declaration", peekToken(local_ts));
         // TODO verbose: missing ) after `var identifer(parameters`
 
         parsingSuccessfull = false;
@@ -191,7 +199,13 @@ ParseResult parse_fun_def() {
 }
 
 ParseResult parse_var_def() {
-    if (isEOFNext()) { return PR_EOF; }
+    if (isEOFNext())
+    {
+        printSyntaxError(fileName, "invalid definition", prevCheckedToken(local_ts));
+        //TODO verbose: missing `identifier = initializers` after `var`
+
+        return PR_EOF;
+    }
 
     ASTNode* varNode = newASTNode(AST_DEF_VAR, peekToken(local_ts)); // peeked je pricakovan da bo identifier
     if (!varNode) { return PR_ERR_NULL; }
@@ -206,19 +220,26 @@ ParseResult parse_var_def() {
         return PR_ERR_NULL;
     }
 
-    if (checkToken(local_ts, TOKEN_SYMBOL_ASSIGN))
+    if (!checkToken(local_ts, TOKEN_SYMBOL_ASSIGN))
     {
-        const ParseResult initializersList = parse_initializers();
-        if (initializersList.status != PS_OK)
-        {
-            // TODO --help:
+        //TODO verbose: missing assing operator after `var identifier`
+        printSyntaxError(fileName, "invalid variable declaration", prevCheckedToken(local_ts));
 
-            parsingSuccessfull = false;
-            freeAST(varNode);
-            return PR_ERR_NULL;
-        }
-        appendASTNode(varNode, initializersList.node);
+        parsingSuccessfull = false;
+        freeAST(varNode);
+        return PR_ERR_NULL;
     }
+
+    const ParseResult initializersList = parse_initializers();
+    if (initializersList.status != PS_OK)
+    {
+        // TODO --help:
+
+        parsingSuccessfull = false;
+        freeAST(varNode);
+        return PR_ERR_NULL;
+    }
+    appendASTNode(varNode, initializersList.node);
 
     return PR_OK(varNode);
 }
@@ -236,7 +257,7 @@ ParseResult parse_parameters() {
     // ni parametrov, `parameter` vrne PR_NO_MATCH
     if (firstParam.status == PS_ERROR)
     {
-        printSyntaxError(fileName, "incorrect function declaration", peekToken(local_ts));
+        printSyntaxError(fileName, "invalid function declaration", peekToken(local_ts));
         // TODO verbose: incorrect parameters
 
         freeAST(paramsList);
@@ -259,7 +280,7 @@ ParseResult parse_parameters() {
         // za vejico v parametrih funkcije ni bilo identifier-ja
         if (nextParameter.status != PS_OK)
         {
-            printSyntaxError(fileName, "incorrect function declaration", prevCheckedToken(local_ts));
+            printSyntaxError(fileName, "invalid function declaration", prevCheckedToken(local_ts));
             // TODO verbose: expected parameter(identifier) after \",\" in function parameters
 
             parsingSuccessfull = false;
@@ -294,7 +315,14 @@ ParseResult parse_individual_parameter() {
 }
 
 ParseResult parse_statements() {
-    if (isEOFNext()) { return PR_EOF; }
+    if (isEOFNext())
+    {
+        printSyntaxError(fileName, "invalid function statements", prevCheckedToken(local_ts));
+        //TODO verbose: function body must contain 1 or more statements
+
+        parsingSuccessfull = false;
+        return PR_EOF;
+    }
 
     ASTNode* statementListNode = newASTNode(AST_STMT_LIST, NULL);
     if (!statementListNode) { return PR_ERR_NULL; }
@@ -302,7 +330,7 @@ ParseResult parse_statements() {
     const ParseResult firstStatement = parse_individual_statement();
     if (firstStatement.status != PS_OK)
     {
-        printf("incorrect statements as function body\n");
+        printSyntaxError(fileName, "invalid statement", prevCheckedToken(local_ts));
 
         parsingSuccessfull = false;
         freeAST(statementListNode);
@@ -316,7 +344,8 @@ ParseResult parse_statements() {
         const ParseResult stmntAfterComma = parse_individual_statement();
         if (stmntAfterComma.status != PS_OK)
         {
-            printf("invalid statement after comma in function body\n");
+            printSyntaxError(fileName, "invalid statement", prevCheckedToken(local_ts));
+            //TODO verbose: printf("invalid statement after comma in function body\n");
 
             parsingSuccessfull = false;
             freeAST(statementListNode);
@@ -324,6 +353,15 @@ ParseResult parse_statements() {
         }
 
         appendASTNode(statementListNode, stmntAfterComma.node);
+    }
+
+    // check za manjkajoco vejico
+    const Token* nextToken = peekToken(local_ts);
+    if (nextToken->type != TOKEN_KEYWORD_VAR && nextToken->type != TOKEN_KEYWORD_FUN
+        && nextToken->type != TOKEN_KEYWORD_ELSE && nextToken->type != TOKEN_KEYWORD_END
+        && nextToken->type != TOKEN_EOF)
+    {
+        printSyntaxError(fileName, "possibly missing comma (',') after statement", prevCheckedToken(local_ts));
     }
 
     return PR_OK(statementListNode);
@@ -372,7 +410,7 @@ ParseResult parse_individual_statement() {
         return PR_ERR_NULL;
     }
 
-    ASTNode* statementNode = newASTNode(AST_STMT_EXPR, peekToken(local_ts));
+    ASTNode* statementNode = newASTNode(AST_STMT_EXPR, NULL);
     if (!statementNode)
     {
         freeAST(loneExpression.node);
@@ -408,23 +446,31 @@ ParseResult parse_if_statement() {
     const ParseResult ifExpression = parse_expression(0);
     if (ifExpression.status != PS_OK)
     {
-        printf("incorrect expression after if\n");
+        printSyntaxError(fileName, "invalid expression", prevCheckedToken(local_ts));
+        //TODO verbose: printf("incorrect expression after if\n");
+
         parsingSuccessfull = false;
+        freeAST(ifNode);
         return PR_ERR_NULL;
     }
 
     if (!checkToken(local_ts, TOKEN_KEYWORD_THEN))
     {
-        printf("missing `then` keyword in if statement\n");
+        printSyntaxError(fileName, "invalid statement", prevCheckedToken(local_ts));
+        //TODO verbose: printf("missing `then` keyword in if statement\n");
+
         parsingSuccessfull = false;
+        freeAST(ifNode);
         return PR_ERR_NULL;
     }
 
     const ParseResult ifStatements = parse_statements();
     if (ifStatements.status != PS_OK)
     {
-        printf("incorrect statement after if-expression-then\n");
+        //TODO verbose: mogoce??? ni ravno nujno? printf("incorrect statement after if-expression-then\n");
+
         parsingSuccessfull = false;
+        freeAST(ifNode);
         return PR_ERR_NULL;
     }
 
@@ -437,7 +483,7 @@ ParseResult parse_if_statement() {
         const ParseResult elseStatements = parse_statements();
         if (elseStatements.status != PS_OK)
         {
-            printf("incorrect statements after else\n");
+            //TODO verbose: mogoce?? ni ravno nujno?? printf("incorrect statements after else\n");
             parsingSuccessfull = false;
             freeAST(ifNode);
             return PR_ERR_NULL;
@@ -448,7 +494,7 @@ ParseResult parse_if_statement() {
 
     if (!checkToken(local_ts, TOKEN_KEYWORD_END))
     {
-        printf("missing `end` keyword in if statement\n");
+        //TODO verbose: mogoce?? printf("missing `end` keyword in if statement\n");
         parsingSuccessfull = false;
         freeAST(ifNode);
         return PR_ERR_NULL;
@@ -466,7 +512,7 @@ ParseResult parse_while_statement() {
     const ParseResult whileExpression = parse_expression(0);
     if (whileExpression.status != PS_OK)
     {
-        printf("incorrect expression after while\n");
+        //TODO  verbose: mogoce?? printf("incorrect expression after while\n");
         parsingSuccessfull = false;
         return PR_ERR_NULL;
     }
@@ -475,7 +521,7 @@ ParseResult parse_while_statement() {
 
     if (!checkToken(local_ts, TOKEN_KEYWORD_DO))
     {
-        printf("missing `do` keyword in while\n");
+        //TODO  verbose: mogoce?? printf("missing `do` keyword in while\n");
         parsingSuccessfull = false;
         freeAST(whileStatementNode);
         return PR_ERR_NULL;
@@ -484,7 +530,7 @@ ParseResult parse_while_statement() {
     const ParseResult whileStatements = parse_statements();
     if (whileStatements.status != PS_OK)
     {
-        printf("incorrect statements after while-do\n");
+        //TODO  verbose: mogoce?? printf("incorrect statements after while-do\n");
         parsingSuccessfull = false;
         freeAST(whileStatementNode);
         return PR_ERR_NULL;
@@ -494,7 +540,7 @@ ParseResult parse_while_statement() {
 
     if (!checkToken(local_ts, TOKEN_KEYWORD_END))
     {
-        printf("missing `end` keyword in while\n");
+        //TODO  verbose: mogoce?? printf("missing `end` keyword in while\n");
         parsingSuccessfull = false;
         freeAST(whileStatementNode);
         return PR_ERR_NULL;
@@ -534,7 +580,7 @@ ParseResult parse_let_in_end() {
 
     if (!checkToken(local_ts, TOKEN_KEYWORD_IN))
     {
-        printf("missing `in` keyword in let (definition)+ in statements end\n");
+        //TODO  verbose: mogoce?? printf("missing `in` keyword in let (definition)+ in statements end\n");
 
         parsingSuccessfull = false;
         freeAST(letInEndNode);
@@ -544,7 +590,7 @@ ParseResult parse_let_in_end() {
     const ParseResult statements = parse_statements();
     if (statements.status != PS_OK)
     {
-        printf("incorrect statements after let (definition)+ in\n");
+        //TODO  verbose: mogoce?? printf("incorrect statements after let (definition)+ in\n");
 
         parsingSuccessfull = false;
         freeAST(letInEndNode);
@@ -555,7 +601,7 @@ ParseResult parse_let_in_end() {
 
     if (!checkToken(local_ts, TOKEN_KEYWORD_END))
     {
-        printf("missing `end` keyword in let (definition)+ in statements end\n");
+        //TODO  verbose: mogoce?? printf("missing `end` keyword in let (definition)+ in statements end\n");
 
         parsingSuccessfull = false;
         freeAST(letInEndNode);
@@ -681,7 +727,7 @@ ParseResult parse_expression(const int precedence) {
             if (!checkToken(local_ts, TOKEN_SYMBOL_RIGHT_PAREN)) {
                 //TODO --verbose: possibly missing ")" / incorrect arguments
                 // testiraj z fun i(ena)= ime = ena(1==1=2)
-                printSyntaxError(fileName, "invalid function call", peekToken(local_ts));
+                printSyntaxError(fileName, "invalid function call", prevCheckedToken(local_ts));
                 parsingSuccessfull = false;
                 return PR_ERR_NULL;
             }
@@ -738,7 +784,7 @@ ParseResult parse_expression(const int precedence) {
                 lhs = node;
             } else
             {
-                printf("incorrect postfix/infix expression\n");
+                //TODO  verbose: mogoce?? printf("incorrect postfix/infix expression\n");
 
                 parsingSuccessfull = false;
                 return PR_ERR_NULL;
@@ -747,65 +793,6 @@ ParseResult parse_expression(const int precedence) {
     }
 
     return PR_OK(lhs);
-}
-
-// TODO REWRITE
-ParseResult parse_arguments() {
-    if (isEOFNext()) { return PR_EOF; }
-
-    // note:
-    // oklepaje "(" ")" checka in consuma parse_expression()
-
-    // params list node ki ga vracamo
-    ASTNode* argsList = newASTNode(AST_ARG_LIST, NULL);
-    if (!argsList) { return PR_ERR_NULL; }
-
-    const ParseResult firstParam = parse_expression(0);
-
-    if (firstParam.status != PS_OK)
-    {
-        // TODO --verbose: incorrect first argument in function call
-
-        parsingSuccessfull = false;
-        freeAST(argsList);
-        return PR_ERR_NULL;
-    }
-
-    // argumenti niso obvezni, ce dobimo PS_OK in node NULL samo vrnemo prazen AST_ARG_LIST
-    if (firstParam.node == NULL)
-    {
-        return PR_OK(argsList);
-    } else
-    {
-        appendASTNode(argsList, firstParam.node);
-    }
-
-    while (checkToken(local_ts, TOKEN_SYMBOL_COMMA))
-    {
-        const ParseResult res = parse_expression(0);
-        if (res.status != PS_OK)
-        {
-            printf("incorrect arguments after \",\"\n");
-
-            parsingSuccessfull = false;
-            freeAST(argsList);
-            return PR_ERR_NULL;
-        }
-
-        if (res.node == NULL)
-        {
-            printf("expected expression after \",\" in arguments\n");
-
-            parsingSuccessfull = false;
-            freeAST(argsList);
-            return PR_ERR_NULL;
-        } else
-        {
-            appendASTNode(argsList, res.node);
-        }
-    }
-
-    return PR_OK(argsList);
 }
 
 ParseResult parse_initializers() {
