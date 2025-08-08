@@ -106,6 +106,7 @@ const char* ASTNodeType_toString(const ASTNodeType type) {
     case AST_ARG_LIST:      return "ARG_LIST";
     case AST_STMT_LIST:     return "STMT_LIST";
     case AST_STMT_EXPR:     return "STMT_EXPR";
+    case AST_STMT_ASSIGN:   return "STMT_ASSIGN";
     case AST_STMT_IF:       return "STMT_IF";
     case AST_STMT_IF_ELSE:  return "STMT_IF_ELSE";
     case AST_STMT_WHILE:    return "STMT_WHILE";

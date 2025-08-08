@@ -417,7 +417,7 @@ ParseResult parse_individual_statement() {
 
     if (checkToken(local_ts, TOKEN_SYMBOL_ASSIGN))
     {
-        statementNode->type = AST_EXPR_BINARY;
+        statementNode->type = AST_STMT_ASSIGN;
         statementNode->token = prevCheckedToken(local_ts); // expr "=" expr
 
         const ParseResult secondExpression = parse_expression(0);
@@ -510,6 +510,7 @@ ParseResult parse_while_statement() {
     {
         //TODO  verbose: mogoce?? printf("incorrect expression after while\n");
         parsingSuccessfull = false;
+        freeAST(whileStatementNode);
         return PR_ERR_NULL;
     }
 
@@ -626,7 +627,7 @@ ParseResult parse_expression(const int precedence) {
             const ParseResult rhs = parse_expression(getPrecedence(token->type, true));
             if (rhs.status != PS_OK)
             {
-                printSyntaxError(fileName, "incorrect form of expression", prevCheckedToken(local_ts));
+                printSyntaxError(fileName, "invalid expression", prevCheckedToken(local_ts));
                 // TODO verbose: incorrect form of prefix expression, --help
 
                 parsingSuccessfull = false;
@@ -661,19 +662,32 @@ ParseResult parse_expression(const int precedence) {
             break;
         }
         case TOKEN_SYMBOL_LEFT_PAREN: {
-            token = consumeToken(local_ts);
-            const ParseResult innerExpression = parse_expression(getPrecedence(token->type, true));
+                consumeToken(local_ts); // "("
 
-            if (innerExpression.status != PS_OK || !checkToken(local_ts, TOKEN_SYMBOL_RIGHT_PAREN))
-            {
-                printSyntaxError(fileName, "mismatched parentheses", peekToken(local_ts));
-                parsingSuccessfull = false;
-                return PR_ERR_NULL;
-            }
+                // empty () check
+                if (peekToken(local_ts)->type == TOKEN_SYMBOL_RIGHT_PAREN) {
+                    //TODO verbose: empty parentheses are not allowed
+                    printSyntaxError(fileName, "invalid expression", peekToken(local_ts));
+                    parsingSuccessfull = false;
+                    return PR_ERR_NULL;
+                }
 
-            lhs = innerExpression.node;
+                const ParseResult inner = parse_expression(0);
+                if (inner.status != PS_OK) {
+                    parsingSuccessfull = false;
+                    return PR_ERR_NULL;
+                }
 
-            break;
+                if (!checkToken(local_ts, TOKEN_SYMBOL_RIGHT_PAREN)) {
+                    //TODO verbose: missing closing ')'
+                    printSyntaxError(fileName, "invalid expression", peekToken(local_ts));
+
+                    parsingSuccessfull = false;
+                    return PR_ERR_NULL;
+                }
+
+                lhs = inner.node;
+                break;
         }
         default:
             parsingSuccessfull = false;
@@ -703,7 +717,7 @@ ParseResult parse_expression(const int precedence) {
                 // prvi argument
                 const ParseResult arg = parse_expression(0);
                 if (arg.status != PS_OK) {
-                    printSyntaxError(fileName, "incorrect argument in function call", prevCheckedToken(local_ts));
+                    printSyntaxError(fileName, "invalid argument in function call", prevCheckedToken(local_ts));
 
                     parsingSuccessfull = false;
                     freeAST(lhs);
@@ -716,7 +730,7 @@ ParseResult parse_expression(const int precedence) {
                     const ParseResult more = parse_expression(0);
                     if (more.status != PS_OK) {
                         //TODO verbose: mogoce spodnji msg samo v verbose
-                        printSyntaxError(fileName, "incorrect argument after comma", prevCheckedToken(local_ts));
+                        printSyntaxError(fileName, "invalid argument after comma", prevCheckedToken(local_ts));
 
                         parsingSuccessfull = false;
                         freeAST(argsList);
@@ -804,22 +818,19 @@ ParseResult parse_expression(const int precedence) {
 
 ParseResult parse_initializers() {
     // ni EOF checka ker je lahko zadnja vrstica `var ime = ` in je valid
-    // prav tako ni checka v parse_individual_initializer()
 
     // initializer list node ki ga vracamo
     ASTNode* initsList = newASTNode(AST_INITS_LIST, NULL);
     if (!initsList) { return PR_ERR_NULL; }
 
-    // .status == PS_EOF ni mozen (beri zgoraj)
     const ParseResult firstInit = parse_individual_initializer(true);
 
-    if (firstInit.status == PS_OK)
+    if (firstInit.status == PS_NO_MATCH || firstInit.status == PS_EOF)
     {
-        appendASTNode(initsList, firstInit.node);
-    } else
-    {
-        // TODO verbose: mogoce?? printf("incorrect initializers (first initializer)\n");
+        return PR_OK(initsList);
+    }
 
+    if (firstInit.status != PS_OK || !appendASTNode(initsList, firstInit.node)) {
         parsingSuccessfull = false;
         freeAST(initsList);
         return PR_ERR_NULL;
@@ -845,13 +856,14 @@ ParseResult parse_initializers() {
 }
 
 ParseResult parse_individual_initializer(const bool isFirstInitializer) {
+    if (isEOFNext()) { return PR_EOF; }
 
     const ParseResult left = parse_constant();
 
     if (left.status == PS_NO_MATCH || left.status == PS_EOF) {
         if (isFirstInitializer)
         {
-            return PR_OK(left.node);
+            return PR_OK(NULL);
         }
 
         freeAST(left.node);

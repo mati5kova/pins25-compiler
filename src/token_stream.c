@@ -21,7 +21,7 @@ TokenStream* createTokenStream(Token** tokens, const int numOfTokens) {
 }
 
 Token* consumeToken(TokenStream* ts) {
-    if (ts->index >= ts->numOfTokens) {
+    if (ts->index >= ts->numOfTokens - 1) {
         return (ts->tokens)[ts->numOfTokens - 1];
     }
 
@@ -29,7 +29,9 @@ Token* consumeToken(TokenStream* ts) {
 }
 
 Token* peekToken(const TokenStream* ts) {
-    return (ts->tokens)[ts->index];
+    const int i = ts->index < ts->numOfTokens ? ts->index : ts->numOfTokens - 1;
+
+    return (ts->tokens)[i];
 }
 
 bool checkToken(TokenStream* ts, const TokenType expectedType) {
@@ -45,12 +47,9 @@ bool checkToken(TokenStream* ts, const TokenType expectedType) {
 }
 
 Token* prevCheckedToken(const TokenStream* ts) {
-    if (ts->index < 0)
-    {
-        return (ts->tokens)[0];
-    }
+    const int i = (ts->index > 0) ? ts->index - 1 : 0;
 
-    return (ts->tokens)[ts->index - 1];
+    return ts->tokens[i];
 }
 
 Token* currentToken(const TokenStream* ts) {

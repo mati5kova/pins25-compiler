@@ -9,11 +9,11 @@
 #include "./lexer.h"
 
 typedef enum {
-    AST_ROOT,           // the root of the whole program
+    AST_ROOT,           // root
 
     AST_DEF_LIST,       // definitions
-    AST_DEF_FUN,        // a “fun” definition
-    AST_DEF_VAR,        // a “var” definition
+    AST_DEF_FUN,        // "fun" definition
+    AST_DEF_VAR,        // "var" definition
 
     // lists
     AST_INITS_LIST,
@@ -22,7 +22,8 @@ typedef enum {
     AST_STMT_LIST,      // comma‑separated statements
 
     // statements
-    AST_STMT_EXPR,      // an expression statement (including assignment)
+    AST_STMT_EXPR,      // expression statement
+    AST_STMT_ASSIGN,    // assignment: expr = expr
     AST_STMT_IF,        // if‑then (no else)
     AST_STMT_IF_ELSE,   // if‑then‑else
     AST_STMT_WHILE,     // while‑do‑end
@@ -35,10 +36,10 @@ typedef enum {
     AST_EXPR_CALL,      // function call (callee, args…)
 
     // leaves
-    AST_IDENT,          // identifier reference
-    AST_CONST_INT,      // integer literal
-    AST_CONST_CHAR,     // char literal
-    AST_CONST_STRING,   // string literal
+    AST_IDENT,          // identifier
+    AST_CONST_INT,      // int const
+    AST_CONST_CHAR,     // char const
+    AST_CONST_STRING,   // string const
 
     AST_TEMP
 } ASTNodeType;
