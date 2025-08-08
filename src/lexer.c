@@ -10,28 +10,18 @@
 
 #include "../include/error_utils.h"
 #include "../include/lexer.h"
+#include "../include/compiler_data.h"
 
 #define INITIAL_TOKEN_COUNT 100                         // zacetno stevilo tokenov
-
 #define INITIAL_BUFFER_SIZE 500                         // zacetna velikost source bufferja
-
-#define MAX_IDENTIFIER_LENGTH 64                        // maksimalna dolzina za imena spremenljivk (63 znakov + \0)
-
+#define MAX_IDENTIFIER_LENGTH 64                        // maksimalna dolzina za imena spremenljivk
 #define PRINT_HELP_LEXER_TITLE "PINS'25 LEXICAL RULES"  // title za --help za lexikalno analizo
 
-bool passedLexicalAnalysis = true;                      // bool ali so bile v fazi lexikalne analize zaznane kaksne napake
-
-int numberOfInputChars = 0;                             // stevilo znakov v vhodni datoteki da vemo do kam loop-amo v `tokenize`
-
-int tokenCount = 0;                                     // stevilo tokenov v tabeli tokenov
-
-char* source;                                           // kazalec na buffer z vsebino vhodne datoteke
-
-const short numberOfReservedKeywords = 10; // stevilo rezerviranih besed jezika
-const char* reservedKeywords[] = {"fun", "var", "if", "then", "else", "while", "do", "let", "in", "end"}; // rezervirane besede
+static const short numberOfReservedKeywords = 10;       // stevilo rezerviranih besed jezika
+static const char* reservedKeywords[] = {"fun", "var", "if", "then", "else", "while", "do", "let", "in", "end"}; // rezervirane besede
 
 // `skipUntilLineEnd` bere znake do konca vrstice in vrne stevilo prebranih znakov
-int skipUntilLineEnd(const char* src) {
+static int skipUntilLineEnd(const char* src) {
     int counter = 0;
     while (src[counter] != '\n' && src[counter] != '\0') {
         counter++;
@@ -40,24 +30,9 @@ int skipUntilLineEnd(const char* src) {
     return counter;
 }
 
-// `retrieveTokenCount` vrne stevilo tokenov ki jih je ustvaril lexikalni strol
-int retrieveTokenCount() { return tokenCount; }
-
-// `isLexicallValid` vrne true ce ni bilo zaznane nobene lexikalne napake, drugace vrne false
-bool isLexicallyValid() { return passedLexicalAnalysis; }
-
 // helper funkcija `incPosition` poveca vrednosti vhodnih argumentov za +1
 // da ni potrebno vedno pisati: pos++; col++;
-void incPosition(int* a, int* b) {
-    (*a)++;
-    (*b)++;
-}
-
-// `cleanupSourceBuffer` sprosti pomnilnik ki ga zavzame source buffer
-// pomembno je da se klice ob napaki in pa na koncu main funkcije, saj na source buffer kazejo kazalci znotraj posameznih Tokenov
-void cleanupSourceBuffer() {
-    free(source);
-}
+static inline void incPosition(int* a, int* b) { (*a)++; (*b)++; }
 
 /*
  * `stringifyInputFile` vrne kazalec na tabelo znakov
@@ -65,9 +40,9 @@ void cleanupSourceBuffer() {
  * celotno vsebino vhodne datoteke shranimo v buffer ki ga nato uporabljamo
  * kot source v `tokenize` funkciji
  */
-char* stringifyInputFile(FILE* inputFile) {
-    rewind(inputFile);
-    numberOfInputChars = 0;
+static char* stringifyInputFile(CompilerData* compData) {
+    rewind(compData->inputFile);
+    compData->sourceLen = 0;
 
     // imamo zacetni buffer size ki ga po potrebi povecujemo
     int currentMaxBufferSIze = INITIAL_BUFFER_SIZE;
@@ -77,12 +52,12 @@ char* stringifyInputFile(FILE* inputFile) {
     }
 
     int c;
-    while ((c = fgetc(inputFile)) != EOF) {
+    while ((c = fgetc(compData->inputFile)) != EOF) {
         if (c == '\r') {
             continue;
         }
 
-        if (numberOfInputChars + 1 >= currentMaxBufferSIze) {
+        if (compData->sourceLen + 1 >= currentMaxBufferSIze) {
             char* temp = realloc(buffer, currentMaxBufferSIze * 2);
             if (!temp) {
                 free(buffer);
@@ -93,12 +68,12 @@ char* stringifyInputFile(FILE* inputFile) {
             currentMaxBufferSIze *= 2;
         }
 
-        buffer[numberOfInputChars] = (char) c;
+        buffer[compData->sourceLen] = (char) c;
 
-        numberOfInputChars++;
+        (compData->sourceLen)++;
     }
 
-    buffer[numberOfInputChars] = '\0';
+    buffer[compData->sourceLen] = '\0';
 
     return buffer;
 }
@@ -109,7 +84,7 @@ char* stringifyInputFile(FILE* inputFile) {
  *
  * `tokenize` kot rezultat vrne kazalec na prvi element tabele kazalcev na posamezne Token-e
  */
-Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
+Token** tokenize(CompilerData* compData) {
     int ln = 1;
     int col = 1;
     int pos = 0;
@@ -123,27 +98,24 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
     }
 
     // source je sedaj nasa tabela znakov napolnjena z vsebino vhodne datoteke
-    source = stringifyInputFile(inputFile);
-    if (!source) {
-        // ce je bila napaka pri malloc-u v `stringifyInputFile`
-        cleanupTokens(tokens);
+    compData->source = stringifyInputFile(compData);
+    if (!(compData->source)) {
         return NULL;
     }
 
     // glavni loop ki gre skozi vse znake source bufferja
-    while (source[pos] != '\0' && pos < numberOfInputChars) {
-        if (tokenCount + 1 >= maxNumberOfTokensInBuffer) {
+    while ((compData->source)[pos] != '\0' && pos < (compData->sourceLen)) {
+        if ((compData->tokenCount) + 1 >= maxNumberOfTokensInBuffer) {
             maxNumberOfTokensInBuffer *= 2;
             Token** temp = realloc(tokens, maxNumberOfTokensInBuffer * sizeof(Token*));
             if (!temp) {
-                cleanupTokens(tokens);
-                cleanupSourceBuffer();
                 return NULL;
             }
+            
             tokens = temp;
         }
 
-        const char c = source[pos];
+        const char c = (compData->source)[pos];
 
         // ob presledkih se samo premaknemo naprej
         if (c == ' ') {
@@ -159,16 +131,16 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
         }
 
         // ce sta trenutni in naslednji znak enaka `/` klicemo `skipUntilLineEnd` in rezultat pristejemo poziciji
-        if (c == '/' && source[pos + 1] == '/') {
-            pos += skipUntilLineEnd(&(source[pos]));
+        if (c == '/' && (compData->source)[pos + 1] == '/') {
+            pos += skipUntilLineEnd(&((compData->source)[pos]));
             continue;
         }
 
         // ustvarimo nov Token
-        Token* newToken = createToken(TOKEN_EOF, &(source[pos]), 0, ln, col, pos);
+        Token* newToken = createToken(TOKEN_EOF, &((compData->source)[pos]), 0, ln, col, pos);
         if (!newToken) {
-            cleanupTokens(tokens);
-            cleanupSourceBuffer();
+
+
             return NULL;
         }
 
@@ -184,17 +156,42 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
             int lexemLength = 0;
 
             bool hasLeadingZeros = false;
-            if (firstDigit == 0 && isdigit(source[pos + 1])) {
+            if (firstDigit == 0 && isdigit((compData->source)[pos + 1])) {
                 isValidNumber = false;
                 newToken->type = TOKEN_ERROR;
                 hasLeadingZeros = true;
             }
 
             // beremo dokler so stevke
-            while (isdigit(source[pos]) && source[pos] != '\0' && source[pos] != '\n' && source[pos] != EOF) {
-                number = number * 10 + (source[pos] - '0');
+            while (isdigit((compData->source)[pos]) && (compData->source)[pos] != '\0' && (compData->source)[pos] != '\n' && (compData->source)[pos] != EOF) {
+                number = number * 10 + ((compData->source)[pos] - '0');
                 lexemLength++;
                 incPosition(&pos, &col);
+            }
+
+            // za napake kot so `var fun name id "99name_ofVar"`
+            if (isalpha((compData->source)[pos]) || (compData->source)[pos] == '_') {
+                int lenOfPossibleIdentifier = lexemLength;
+                int tempPos = pos;
+                while ((isalnum((compData->source)[tempPos]) || (compData->source)[tempPos] == '_') && (compData->source)[tempPos] != '\0' && (compData->source)[tempPos] != '\n')
+                {
+                    tempPos++;
+                    lenOfPossibleIdentifier++;
+                }
+
+                compData->lexOK = false;
+
+                printLexerError(compData->inputFileName, "invalid identifier/numeric constant", ln, col, pos, newToken->start, lenOfPossibleIdentifier);
+                if ((compData->opts).verbose)
+                {
+                    printVerboseInfo("identifier can not start with a digit, identifiers and numeric constants must be seperated by a space (' ')");
+                }
+                if ((compData->opts).help) {
+                    printHelp(PRINT_HELP_LEXER_TITLE, "Identifiers consist of a series of letters (A...Z and a...z), base 10 digits (0...9)\n"
+                                                      "and underscores (_). They must start with either a letter or an underscore and have a maximum length of 64 characters.");
+                }
+
+                continue;
             }
 
             newToken->length = lexemLength;
@@ -202,18 +199,18 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
             if (isValidNumber) {
                 newToken->type = TOKEN_CONSTANT_INT;
             } else {
-                passedLexicalAnalysis = false;
-                printLexerError(fileName, "invalid numeric constant", ln, col, pos, newToken->start, lexemLength);
-                if (hasLeadingZeros && opts->verbose) {
+                compData->lexOK = false;
+                printLexerError(compData->inputFileName, "invalid numeric constant", ln, col, pos, newToken->start, lexemLength);
+                if (hasLeadingZeros && (compData->opts).verbose) {
                     printVerboseInfo("numeric constant has leading zeros");
                 }
-                if (opts->help) {
+                if ((compData->opts).help) {
                     printHelp(PRINT_HELP_LEXER_TITLE, "Numeric constants consist of non-empty base 10 digits with optional leading +/-.\n"
                                                       "Leading zeros are not allowed.");
                 }
             }
 
-            tokens[tokenCount++] = newToken;
+            tokens[(compData->tokenCount)++] = newToken;
             continue;
         }
 
@@ -227,14 +224,14 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
             char character[4];
             short int characterLength = 0;
 
-            while (source[pos] != '\0' && source[pos] != '\'') {
+            while ((compData->source)[pos] != '\0' && (compData->source)[pos] != '\'') {
                 if (characterLength >= 4) {
                     charConstTooLong = true;
                     isValidCharConstant = false;
                 }
 
                 if (!charConstTooLong) {
-                    character[characterLength] = source[pos];
+                    character[characterLength] = (compData->source)[pos];
                 }
                 characterLength++;
                 incPosition(&pos, &col);
@@ -245,9 +242,9 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
 
             if (charConstTooLong) {
                 newToken->type = TOKEN_ERROR;
-                passedLexicalAnalysis = false;
-                printLexerError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
-                if (opts->verbose) {
+                compData->lexOK = false;
+                printLexerError(compData->inputFileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
+                if ((compData->opts).verbose) {
                     printVerboseInfo("character constant is too long");
                 }
             } else {
@@ -262,19 +259,19 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                             newToken->type = TOKEN_CONSTANT_CHAR;
                         } else {
                             newToken->type = TOKEN_ERROR;
-                            passedLexicalAnalysis = false;
+                            compData->lexOK = false;
                             isValidCharConstant = false;
-                            printLexerError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
-                            if (opts->verbose) {
+                            printLexerError(compData->inputFileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
+                            if ((compData->opts).verbose) {
                                 printVerboseInfo("invalid hexadecimal representation");
                             }
                         }
                     } else {
                         newToken->type = TOKEN_ERROR;
-                        passedLexicalAnalysis = false;
+                        compData->lexOK = false;
                         isValidCharConstant = false;
-                        printLexerError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
-                        if (opts->verbose) {
+                        printLexerError(compData->inputFileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
+                        if ((compData->opts).verbose) {
                             printVerboseInfo("invalid combination of characters after '\\'");
                         }
                     }
@@ -284,14 +281,14 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                         newToken->type = TOKEN_CONSTANT_CHAR;
                     }
                 } else {
-                    passedLexicalAnalysis = false;
+                    compData->lexOK = false;
                     isValidCharConstant = false;
                     newToken->type = TOKEN_ERROR;
-                    printLexerError(fileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
+                    printLexerError(compData->inputFileName, "invalid character constant", ln, col, pos, newToken->start, newToken->length);
                 }
             }
 
-            if (!isValidCharConstant && opts->help) {
+            if (!isValidCharConstant && (compData->opts).help) {
                 printHelp(PRINT_HELP_LEXER_TITLE,
                                 "Character constants consist of a single character enclosed in single quotes (').\n"
                                      "Valid forms are:\n"
@@ -301,7 +298,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                                      );
             }
 
-            tokens[tokenCount++] = newToken;
+            tokens[(compData->tokenCount)++] = newToken;
             continue;
         }
 
@@ -315,21 +312,21 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
             bool hasInvalidEscape = false;
             bool hasInvalidHex = false;
 
-            while (source[pos] != '\0') {
+            while ((compData->source)[pos] != '\0') {
                 // string se spana cez vec vrstic kar ni dovoljeno
-                if (source[pos] == '\n') {
+                if ((compData->source)[pos] == '\n') {
                     terminated = false;
                     break;
                 }
 
-                if (source[pos] == '\\') {
+                if ((compData->source)[pos] == '\\') {
                     // simple escapes \n, \\, \", \'
-                    if (pos + 1 < numberOfInputChars && (source[pos + 1] == 'n' || source[pos + 1] == '\\' || source[pos + 1] == '"' || source[pos + 1] == '\'')) {
+                    if (pos + 1 < (compData->sourceLen) && ((compData->source)[pos + 1] == 'n' || (compData->source)[pos + 1] == '\\' || (compData->source)[pos + 1] == '"' || (compData->source)[pos + 1] == '\'')) {
                         // vredu
                         incPosition(&pos, &col);
                         len++;
-                    } else if (pos + 2 < numberOfInputChars && isxdigit(source[pos + 1])) {
-                        if (isxdigit(source[pos + 2])) {
+                    } else if (pos + 2 < (compData->sourceLen) && isxdigit((compData->source)[pos + 1])) {
+                        if (isxdigit((compData->source)[pos + 2])) {
                             // vredu
                         } else {
                             hasInvalidHex = true;
@@ -341,11 +338,11 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                 }
 
                 int backslashCount = 0;
-                for (int i = pos - 1; i >= 0 && source[i] == '\\'; --i) {
+                for (int i = pos - 1; i >= 0 && (compData->source)[i] == '\\'; --i) {
                     backslashCount++;
                 }
 
-                if (source[pos] == '"' && (backslashCount % 2) == 0 && !firstChar) {
+                if ((compData->source)[pos] == '"' && (backslashCount % 2) == 0 && !firstChar) {
                     terminated = true;
                     len++; // odstrani ce noces zadnjega " v lexemu + bool firstChar
                     break;
@@ -359,14 +356,14 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
             newToken->length = len;
 
             if (hasInvalidEscape || !terminated || hasInvalidHex) {
-                passedLexicalAnalysis = false;
+                compData->lexOK = false;
             }
 
             if (hasInvalidEscape || !terminated || hasInvalidHex) {
                 newToken->type = TOKEN_ERROR;
-                printLexerError(fileName,"invalid string constant",ln,col, pos, newToken->start,len);
+                printLexerError(compData->inputFileName,"invalid string constant",ln,col, pos, newToken->start,len);
 
-                if (opts->verbose) {
+                if ((compData->opts).verbose) {
                     if (hasInvalidEscape) {
                         printVerboseInfo("invalid presentation of backslash \\ character");
                     } else if (hasInvalidHex) {
@@ -376,7 +373,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                     }
                 }
 
-                if (opts->help) {
+                if ((compData->opts).help) {
                     printHelp(PRINT_HELP_LEXER_TITLE,
                                 "String constants consist zero or more characters enclosed in double quotes (\").\n"
                                      "Valid forms are:\n"
@@ -391,7 +388,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
 
             incPosition(&pos, &col);
 
-            tokens[tokenCount++] = newToken;
+            tokens[(compData->tokenCount)++] = newToken;
             continue;
         }
 
@@ -401,18 +398,39 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
             if (!keyIdentBuffer) {
                 free(newToken->location);
                 free(newToken);
-                cleanupTokens(tokens);
-                cleanupSourceBuffer();
                 return NULL;
             }
 
             bool isKeyword = false;
             int keyIdentLen = 0;
 
-            while ((isalnum(source[pos]) || source[pos] == '_') && source[pos] != '\0' && source[pos] != '\n') {
-                keyIdentBuffer[keyIdentLen++] = source[pos];
+            while ((isalnum((compData->source)[pos]) || (compData->source)[pos] == '_') && (compData->source)[pos] != '\0' && (compData->source)[pos] != '\n') {
+                //TODO error za predolgo ime
+                if (keyIdentLen < MAX_IDENTIFIER_LENGTH)
+                {
+                    keyIdentBuffer[keyIdentLen] = (compData->source)[pos];
+                }
+                keyIdentLen++;
 
                 incPosition(&pos, &col);
+            }
+
+            if (keyIdentLen > MAX_IDENTIFIER_LENGTH)
+            {
+                free(keyIdentBuffer);
+                compData->lexOK = false;
+
+                printLexerError(compData->inputFileName, "invalid identifier", ln, col, pos, newToken->start, keyIdentLen);
+                if ((compData->opts).verbose)
+                {
+                    printVerboseInfo("identifier exceeds the maximum length of 64 characters");
+                }
+                if ((compData->opts).help) {
+                    printHelp(PRINT_HELP_LEXER_TITLE, "Identifiers consist of a series of letters (A...Z and a...z), base 10 digits (0...9)\n"
+                                                      "and underscores (_). They must start with either a letter or an underscore and have a maximum length of 64 characters.");
+                }
+
+                continue;
             }
 
             keyIdentBuffer[keyIdentLen] = '\0';
@@ -456,34 +474,34 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
 
             free(keyIdentBuffer);
 
-            tokens[tokenCount++] = newToken;
+            tokens[(compData->tokenCount)++] = newToken;
             continue;
         }
 
         // logicni in nekateri ostali operatorji
         newToken->length = 1; // default vrednost, po potrebi damo na 2
         if (c == '&') {
-            if (source[pos + 1] == '&') {
+            if ((compData->source)[pos + 1] == '&') {
                 newToken->type = TOKEN_SYMBOL_LOGICAL_AND;
                 incPosition(&pos, &col);
                 newToken->length = 2;
             } else {
-                printLexerError(fileName, "invalid logical operator", ln, col, pos, newToken->start, 2);
-                passedLexicalAnalysis = false;
+                printLexerError(compData->inputFileName, "invalid logical operator", ln, col, pos, newToken->start, 2);
+                compData->lexOK = false;
                 newToken->type = TOKEN_ERROR;
             }
         } else if (c == '|') {
-            if (source[pos + 1] == '|') {
+            if ((compData->source)[pos + 1] == '|') {
                 incPosition(&pos, &col);
                 newToken->type = TOKEN_SYMBOL_LOGICAL_OR;
                 newToken->length = 2;
             } else {
-                printLexerError(fileName, "invalid logical operator", ln, col, pos, newToken->start, 2);
-                passedLexicalAnalysis = false;
+                printLexerError(compData->inputFileName, "invalid logical operator", ln, col, pos, newToken->start, 2);
+                compData->lexOK = false;
                 newToken->type = TOKEN_ERROR;
             }
         } else if (c == '!') {
-            if (source[pos + 1] == '=') {
+            if ((compData->source)[pos + 1] == '=') {
                 incPosition(&pos, &col);
                 newToken->type = TOKEN_SYMBOL_LOGICAL_NOT_EQUALS;
                 newToken->length = 2;
@@ -491,7 +509,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                 newToken->type = TOKEN_SYMBOL_LOGICAL_NOT;
             }
         } else if (c == '=') {
-            if (source[pos + 1] == '=') {
+            if ((compData->source)[pos + 1] == '=') {
                 incPosition(&pos, &col);
                 newToken->type = TOKEN_SYMBOL_LOGICAL_EQUALS;
                 newToken->length = 2;
@@ -499,7 +517,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                 newToken->type = TOKEN_SYMBOL_ASSIGN;
             }
         } else if (c == '>') {
-            if (source[pos + 1] == '=') {
+            if ((compData->source)[pos + 1] == '=') {
                 incPosition(&pos, &col);
                 newToken->type = TOKEN_SYMBOL_LOGICAL_GREATER_OR_EQUALS;
                 newToken->length = 2;
@@ -507,7 +525,7 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                 newToken->type = TOKEN_SYMBOL_LOGICAL_GREATER;
             }
         } else if (c == '<') {
-            if (source[pos + 1] == '=') {
+            if ((compData->source)[pos + 1] == '=') {
                 incPosition(&pos, &col);
                 newToken->type = TOKEN_SYMBOL_LOGICAL_LESS_OR_EQUALS;
                 newToken->length = 2;
@@ -547,25 +565,23 @@ Token** tokenize(FILE* inputFile, const Options* opts, const char* fileName) {
                 default:
                     incPosition(&pos, &col);
                     newToken->type = TOKEN_ERROR;
-                    passedLexicalAnalysis = false;
-                    printLexerError(fileName, "unknown symbol", ln, col, pos, newToken->start, 1);
+                    compData->lexOK = false;
+                    printLexerError(compData->inputFileName, "unknown symbol", ln, col, pos, newToken->start, 1);
                     printHelp(PRINT_HELP_LEXER_TITLE,"Allowed symbols: = , && || ! == != > < >= <= + - * / % ^ ( )");
                     break;
             }
         }
         incPosition(&pos, &col);
-        tokens[tokenCount++] = newToken;
+        tokens[(compData->tokenCount)++] = newToken;
     }
 
     // ustvarimo zadnji (eof) Token (za potrebe TokenStream funkcij)
     Token* eofToken = createToken(TOKEN_EOF, NULL, 0, -1, -1, -1);
     if (!eofToken) {
-        cleanupTokens(tokens);
-        cleanupSourceBuffer();
         return NULL;
     }
 
-    tokens[tokenCount++] = eofToken;
+    tokens[(compData->tokenCount)++] = eofToken;
 
     return tokens;
 }
@@ -593,7 +609,7 @@ Token* createToken(const TokenType type, char* start, const int length, const in
 }
 
 
-static const char* tokenTypeToString(TokenType type) {
+static const char* tokenTypeToString(const TokenType type) {
     switch (type) {
         case TOKEN_CONSTANT_INT:                     return "TOKEN_CONSTANT_INT";
         case TOKEN_CONSTANT_CHAR:                    return "TOKEN_CONSTANT_CHAR";
@@ -634,8 +650,7 @@ static const char* tokenTypeToString(TokenType type) {
     }
 }
 
-bool printTokens(Token** tokens, const bool outputToFile) {
-    const int numOfTokens = retrieveTokenCount();
+bool printTokens(const CompilerData* compData, const bool outputToFile) {
 
     FILE* out = outputToFile ? fopen("tokens.txt", "w") : stdout;
     if (outputToFile && !out) {
@@ -644,8 +659,8 @@ bool printTokens(Token** tokens, const bool outputToFile) {
     }
 
     char buf[256];
-    for (int i = 0; i < numOfTokens; i++) {
-        const Token* t = tokens[i];
+    for (int i = 0; i < compData->tokenCount; i++) {
+        const Token* t = (compData->tokens)[i];
         const char* typeName = tokenTypeToString(t->type);
 
         int n = snprintf(buf, sizeof buf, "Token[%3d] %-28s \"%.*s\"  (ln:%d, col:%d, pos:%d)\n",
@@ -669,14 +684,4 @@ bool printTokens(Token** tokens, const bool outputToFile) {
     }
 
     return true;
-}
-
-void cleanupTokens(Token** tokens) {
-    const int numOfTokens = retrieveTokenCount();
-    for (int i = 0; i < numOfTokens; i++) {
-        Token* t = tokens[i];
-        free(t->location);
-        free(t);
-    }
-    free(tokens);
 }

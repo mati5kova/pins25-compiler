@@ -3,13 +3,12 @@
 //
 
 #include <stdlib.h>
+
 #include "../include/token_stream.h"
 
 TokenStream* createTokenStream(Token** tokens, const int numOfTokens) {
     TokenStream* ts = malloc(sizeof(TokenStream));
     if (!ts) {
-        cleanupSourceBuffer();
-        cleanupTokens(tokens);
         return NULL;
     }
 
@@ -40,10 +39,9 @@ bool checkToken(TokenStream* ts, const TokenType expectedType) {
     {
         consumeToken(ts);
         return true;
-    } else
-    {
-        return false;
     }
+
+    return false;
 }
 
 Token* prevCheckedToken(const TokenStream* ts) {

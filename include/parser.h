@@ -5,7 +5,6 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include "./token_stream.h"
 #include "./ast.h"
 
 // PS...parse status
@@ -60,7 +59,7 @@ ParseResult parse_arguments();
 
 ParseResult parse_individual_argument();
 
-ASTNode* parse(const TokenStream* inputTokenStream, Options* opts, const char* inputFileName);;
+ASTNode* parse(CompilerData* compDataIn);
 
 // funkcija vrne precedence za nek operator
 int getPrecedence(TokenType type, bool isPrefix);

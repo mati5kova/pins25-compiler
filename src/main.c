@@ -1,99 +1,101 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "../include/compiler_data.h"
 #include "../include/lexer.h"
 #include "../include/options.h"
 #include "../include/parser.h"
 #include "../include/ast.h"
 
-int main(const int argc, char* argv[]) {
-    FILE* in = NULL;
-    Options opts;
-    init_options(&opts);
 
-    if (parse_args(argc, argv, &opts) < 0) {
-        print_usage(argv[0]);
+int main(const int argc, char* argv[]) {
+    CompilerData* compData = createCompilerData();
+    if (!compData)
+    {
+        fprintf(stderr, "Failed to create compiler data\n");
         return EXIT_FAILURE;
     }
 
-    if (opts.n_inputs == 0) {
+    init_options(&(compData->opts));
+
+    if (parse_args(argc, argv, &(compData->opts)) < 0) {
+        print_usage(argv[0]);
+
+        goto cleanup;
+    } else if ((compData->opts).n_inputs == 0) {
         fprintf(stderr, "Error: no file to compile\n");
         print_usage(argv[0]);
-        return EXIT_FAILURE;
-    }
 
-    if (opts.n_inputs > 1) {
+        goto cleanup;
+    } else if ((compData->opts).n_inputs > 1) {
         fprintf(stderr, "Error: too many files to compile\n");
         print_usage(argv[0]);
-        return EXIT_FAILURE;
-    }
 
-    if (opts.n_inputs == 1) {
-        in = fopen(opts.input_files[0], "r");
-        if (!in) {
-            printf("Error opening input file '%s'\n", opts.input_files[0]);
-            return EXIT_FAILURE;
+        goto cleanup;
+    } else if ((compData->opts).n_inputs == 1) {
+        compData->inputFile = fopen((compData->opts).input_files[0], "r");
+        if (!(compData->inputFile)) {
+            perror("Failed to open input file");
+            goto cleanup;
         }
+
+        compData->inputFileName = (compData->opts).input_files[0];
     }
 
-    Token** tokens = tokenize(in, &opts, opts.input_files[0]);
-
-    fclose(in);
-
-    if (!tokens) {
-        fprintf(stderr, "Error occured during lexical analysis of '%s'\n", opts.input_files[0]);
-        return EXIT_FAILURE;
-    }
-
-    const int numOfTokens = retrieveTokenCount();
-    const bool passedLexicalAnalysis = isLexicallyValid();
-
-    if (!passedLexicalAnalysis)
+    // LEKSIKALNA ANALIZA
     {
-        cleanupSourceBuffer();
-        cleanupTokens(tokens);
-        return EXIT_FAILURE;
-    }
+        compData->tokens = tokenize(compData);
 
-    if (opts.list_tokens_all) {
-        if (!printTokens(tokens,true))
+        if (!(compData->tokens)) { // najverjetneje kaksen NULL malloc
+            fprintf(stderr, "Error occured during lexical analysis of '%s'\n", (compData->opts).input_files[0]);
+            goto cleanup;
+        }
+
+        if (!(compData->lexOK)) // leksikalna analiza ni bila uspesna
         {
-            cleanupSourceBuffer();
-            cleanupTokens(tokens);
-            return EXIT_FAILURE;
+            fprintf(stderr, "Lexing failed");
+            goto cleanup;
+        }
+
+        if ((compData->opts).list_tokens_all) {
+            if (!printTokens(compData,true))
+            {
+                goto cleanup;
+            }
         }
     }
 
-    TokenStream* ts = createTokenStream(tokens, numOfTokens);
-    if (!ts) {
-        fprintf(stderr, "Error creating token stream\n");
-        return EXIT_FAILURE;
+    // USTVARI SE TOKEN STREAM
+    {
+        compData->ts = createTokenStream(compData->tokens, compData->tokenCount);
+        if (!(compData->ts)) {
+            fprintf(stderr, "Error creating token stream\n");
+            goto cleanup;
+        }
     }
 
-
-    ASTNode* rootNode = parse(ts, &opts, opts.input_files[0]);
-    const bool parsingSuccessfull = passedSyntaxAnalysis();
-
-    if (!rootNode || !parsingSuccessfull)
+    // SINTAKSNA ANALIZA
     {
-        fprintf(stderr, "Parsing failed");
+        compData->rootASTNode = parse(compData);
+        const bool parsingSuccessfull = passedSyntaxAnalysis();
 
-        cleanupSourceBuffer();
-        cleanupTokens(tokens);
-        freeTokenStream(ts);
-        return EXIT_FAILURE;
-    }
+        if (!(compData->rootASTNode) || !parsingSuccessfull)
+        {
+            fprintf(stderr, "Parsing failed");
+            goto cleanup;
+        }
 
-    if (opts.ast)
-    {
-        printAST(rootNode, 0);
+        if ((compData->opts).ast)
+        {
+            printAST(compData->rootASTNode, 0);
+        }
     }
 
     // cleanup ce je bilo vse vredu
-    cleanupSourceBuffer();
-    cleanupTokens(tokens);
-    freeTokenStream(ts);
-    freeAST(rootNode);
-
+    destroyCompilerData(compData);
     return EXIT_SUCCESS;
+
+cleanup:
+    destroyCompilerData(compData);
+    return EXIT_FAILURE;
 }

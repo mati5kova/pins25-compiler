@@ -5,7 +5,9 @@
 #ifndef TOKEN_STREAM_H
 #define TOKEN_STREAM_H
 
-#include "./lexer.h"
+#include <stdbool.h>
+
+#include "./token.h"
 
 // wrapper struktura za seznam Token-ov
 typedef struct {
@@ -25,13 +27,12 @@ Token* consumeToken(TokenStream* ts);
 Token* peekToken(const TokenStream* ts);
 
 // funkcija peeka token in primerja s pricakovanim,
-// token ustreta pricakovanemu ga consuma
+// ce token ustreza pricakovanemu ga consuma
 bool checkToken(TokenStream* ts, TokenType expectedType);
 
 // funkcija vrne prejsnji token v streamu
 // uporablja se npr. za assign tokena v ast node po uspesnem checkToken (ki sprozi consumeToken ob uspesnem checku)
 Token* prevCheckedToken(const TokenStream* ts);
-
 
 // funkcija vrne token s trenutnim indeksom v token streamu
 Token* currentToken(const TokenStream* ts);

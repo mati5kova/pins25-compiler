@@ -2,32 +2,27 @@
 // Created by Matevž Kovačič on 18. 7. 25.
 //
 
-#include <stdlib.h>
+#include <stdio.h>
+
 #include "../include/parser.h"
 #include "../include/ast.h"
 #include "../include/token_stream.h"
 #include "../include/error_utils.h"
-
-#define SUCCESS true
-#define FAILURE false
 
 #define PR_OK(ret_node) (ParseResult){ .status = PS_OK, .node = ret_node }
 #define PR_ERR_NULL (ParseResult){ .status = PS_ERROR, .node = NULL }
 #define PR_NO_MATCH (ParseResult){ .status = PS_NO_MATCH, .node = NULL }
 #define PR_EOF (ParseResult){ .status = PS_EOF, .node = NULL }
 
-TokenStream* local_ts;
-
-const char* fileName;
-
-bool parsingSuccessfull = true;
-
 // funkcija vrne true | false glede na to ali je naslednji token == TOKEN_EOF (peekToken)
 static bool isEOFNext();
 
-ASTNode* parse(const TokenStream* inputTokenStream, Options* opts, const char* inputFileName) {
-    fileName = inputFileName;
-    local_ts = (TokenStream*) inputTokenStream;
+bool parsingSuccessfull = true;
+
+CompilerData* compData = NULL;
+
+ASTNode* parse(CompilerData* compDataIn) {
+    compData = compDataIn;
 
     const ParseResult parsedRootNode = parse_program();
 
@@ -92,7 +87,7 @@ ParseResult parse_definitions(const bool expectNonDefinitionTokensToFollow) {
 ParseResult parse_individual_definition(const bool expectNonDefinitionTokensToFollow) {
     if (isEOFNext()) { return PR_NO_MATCH; }
 
-    if (checkToken(local_ts, TOKEN_KEYWORD_FUN))
+    if (checkToken(compData->ts, TOKEN_KEYWORD_FUN))
     {
         const ParseResult funDef = parse_fun_def();
         if (funDef.status != PS_OK)
@@ -104,7 +99,7 @@ ParseResult parse_individual_definition(const bool expectNonDefinitionTokensToFo
         return PR_OK(funDef.node);
     }
 
-    if (checkToken(local_ts, TOKEN_KEYWORD_VAR))
+    if (checkToken(compData->ts, TOKEN_KEYWORD_VAR))
     {
         const ParseResult varDef = parse_var_def();
         if (varDef.status != PS_OK)
@@ -121,7 +116,8 @@ ParseResult parse_individual_definition(const bool expectNonDefinitionTokensToFo
         return PR_NO_MATCH;
     }
 
-    printSyntaxError(fileName, "invalid definition", currentToken(local_ts)); // ujame npr. ime = ime = ime,
+    printSyntaxError(compData->inputFileName, "invalid definition", currentToken(compData->ts)); // ujame npr. ime = ime = ime,
+
     parsingSuccessfull = false;
     return PR_ERR_NULL;
 }
@@ -129,18 +125,18 @@ ParseResult parse_individual_definition(const bool expectNonDefinitionTokensToFo
 ParseResult parse_fun_def() {
     if (isEOFNext())
     {
-        printSyntaxError(fileName, "invalid definition", prevCheckedToken(local_ts));
+        printSyntaxError(compData->inputFileName, "invalid definition", prevCheckedToken(compData->ts));
         //TODO verbose: missing `identifier(parameters) = statements` after `fun`
 
         return PR_EOF;
     }
 
-    ASTNode* funNode = newASTNode(AST_DEF_FUN, peekToken(local_ts)); // pricakovano je peekek token identifer
+    ASTNode* funNode = newASTNode(AST_DEF_FUN, peekToken(compData->ts)); // pricakovano je peekek token identifer
     if (!funNode) { return PR_ERR_NULL; }
 
-    if (!checkToken(local_ts, TOKEN_IDENTIFIER))
+    if (!checkToken(compData->ts, TOKEN_IDENTIFIER))
     {
-        printSyntaxError(fileName, "incorrect function declaration", peekToken(local_ts));
+        printSyntaxError(compData->inputFileName, "incorrect function declaration", peekToken(compData->ts));
         // TODO verbose: missing identifier after `var`
 
         parsingSuccessfull = false;
@@ -148,9 +144,9 @@ ParseResult parse_fun_def() {
         return PR_ERR_NULL;
     }
 
-    if (!checkToken(local_ts, TOKEN_SYMBOL_LEFT_PAREN))
+    if (!checkToken(compData->ts, TOKEN_SYMBOL_LEFT_PAREN))
     {
-        printSyntaxError(fileName, "invalid function declaration", peekToken(local_ts));
+        printSyntaxError(compData->inputFileName, "invalid function declaration", peekToken(compData->ts));
         // TODO verbose: missing ( after `var identifer`
 
         parsingSuccessfull = false;
@@ -167,9 +163,9 @@ ParseResult parse_fun_def() {
     }
     appendASTNode(funNode, optionalParameters.node);
 
-    if (!checkToken(local_ts, TOKEN_SYMBOL_RIGHT_PAREN))
+    if (!checkToken(compData->ts, TOKEN_SYMBOL_RIGHT_PAREN))
     {
-        printSyntaxError(fileName, "invalid function declaration", peekToken(local_ts));
+        printSyntaxError(compData->inputFileName, "invalid function declaration", peekToken(compData->ts));
         // TODO verbose: missing ) after `var identifer(parameters`
 
         parsingSuccessfull = false;
@@ -177,7 +173,7 @@ ParseResult parse_fun_def() {
         return PR_ERR_NULL;
     }
 
-    if (checkToken(local_ts, TOKEN_SYMBOL_ASSIGN))
+    if (checkToken(compData->ts, TOKEN_SYMBOL_ASSIGN))
     {
         const ParseResult statements = parse_statements();
         if (statements.status != PS_OK)
@@ -197,18 +193,18 @@ ParseResult parse_fun_def() {
 ParseResult parse_var_def() {
     if (isEOFNext())
     {
-        printSyntaxError(fileName, "invalid definition", prevCheckedToken(local_ts));
+        printSyntaxError(compData->inputFileName, "invalid definition", prevCheckedToken(compData->ts));
         //TODO verbose: missing `identifier = initializers` after `var`
 
         return PR_EOF;
     }
 
-    ASTNode* varNode = newASTNode(AST_DEF_VAR, peekToken(local_ts)); // peeked je pricakovan da bo identifier
+    ASTNode* varNode = newASTNode(AST_DEF_VAR, peekToken(compData->ts)); // peeked je pricakovan da bo identifier
     if (!varNode) { return PR_ERR_NULL; }
 
-    if (!checkToken(local_ts, TOKEN_IDENTIFIER))
+    if (!checkToken(compData->ts, TOKEN_IDENTIFIER))
     {
-        printSyntaxError(fileName, "incorrect variable declaration", peekToken(local_ts));
+        printSyntaxError(compData->inputFileName, "incorrect variable declaration", peekToken(compData->ts));
         //TODO --verbose: missing identifier after `var`
 
         parsingSuccessfull = false;
@@ -216,10 +212,10 @@ ParseResult parse_var_def() {
         return PR_ERR_NULL;
     }
 
-    if (!checkToken(local_ts, TOKEN_SYMBOL_ASSIGN))
+    if (!checkToken(compData->ts, TOKEN_SYMBOL_ASSIGN))
     {
         //TODO verbose: missing assing operator after `var identifier`
-        printSyntaxError(fileName, "invalid variable declaration", prevCheckedToken(local_ts));
+        printSyntaxError(compData->inputFileName, "invalid variable declaration", prevCheckedToken(compData->ts));
 
         parsingSuccessfull = false;
         freeAST(varNode);
@@ -253,7 +249,7 @@ ParseResult parse_parameters() {
     // ni parametrov, `parameter` vrne PR_NO_MATCH
     if (firstParam.status == PS_ERROR)
     {
-        printSyntaxError(fileName, "invalid function declaration", peekToken(local_ts));
+        printSyntaxError(compData->inputFileName, "invalid function declaration", peekToken(compData->ts));
         // TODO verbose: incorrect parameters
 
         freeAST(paramsList);
@@ -269,14 +265,14 @@ ParseResult parse_parameters() {
     appendASTNode(paramsList, firstParam.node);
 
     // dokler prepoznamo vejico
-    while (checkToken(local_ts, TOKEN_SYMBOL_COMMA))
+    while (checkToken(compData->ts, TOKEN_SYMBOL_COMMA))
     {
         const ParseResult nextParameter = parse_individual_parameter();
 
         // za vejico v parametrih funkcije ni bilo identifier-ja
         if (nextParameter.status != PS_OK)
         {
-            printSyntaxError(fileName, "invalid function declaration", prevCheckedToken(local_ts));
+            printSyntaxError(compData->inputFileName, "invalid function declaration", prevCheckedToken(compData->ts));
             // TODO verbose: expected parameter(identifier) after \",\" in function parameters
 
             parsingSuccessfull = false;
@@ -293,16 +289,16 @@ ParseResult parse_parameters() {
 ParseResult parse_individual_parameter() {
     if (isEOFNext()) { return PR_EOF; }
 
-    if (checkToken(local_ts, TOKEN_IDENTIFIER))
+    if (checkToken(compData->ts, TOKEN_IDENTIFIER))
     {
-        ASTNode* id = newASTNode(AST_IDENT, prevCheckedToken(local_ts));
+        ASTNode* id = newASTNode(AST_IDENT, prevCheckedToken(compData->ts));
         if (!id) { return PR_ERR_NULL; }
 
         return PR_OK(id);
     }
 
     // peek ne pa check ker se ")" consuma drugje
-    if (peekToken(local_ts)->type == TOKEN_SYMBOL_RIGHT_PAREN)
+    if (peekToken(compData->ts)->type == TOKEN_SYMBOL_RIGHT_PAREN)
     {
         return PR_NO_MATCH;
     }
@@ -313,7 +309,7 @@ ParseResult parse_individual_parameter() {
 ParseResult parse_statements() {
     if (isEOFNext())
     {
-        printSyntaxError(fileName, "invalid function statements", prevCheckedToken(local_ts));
+        printSyntaxError(compData->inputFileName, "invalid function statements", prevCheckedToken(compData->ts));
         //TODO verbose: function body must contain 1 or more statements
 
         parsingSuccessfull = false;
@@ -326,7 +322,7 @@ ParseResult parse_statements() {
     const ParseResult firstStatement = parse_individual_statement();
     if (firstStatement.status != PS_OK)
     {
-        printSyntaxError(fileName, "invalid statement", prevCheckedToken(local_ts));
+        printSyntaxError(compData->inputFileName, "invalid statement", prevCheckedToken(compData->ts));
 
         parsingSuccessfull = false;
         freeAST(statementListNode);
@@ -335,12 +331,12 @@ ParseResult parse_statements() {
 
     appendASTNode(statementListNode, firstStatement.node);
 
-    while (checkToken(local_ts, TOKEN_SYMBOL_COMMA))
+    while (checkToken(compData->ts, TOKEN_SYMBOL_COMMA))
     {
         const ParseResult stmntAfterComma = parse_individual_statement();
         if (stmntAfterComma.status != PS_OK)
         {
-            printSyntaxError(fileName, "invalid statement", prevCheckedToken(local_ts));
+            printSyntaxError(compData->inputFileName, "invalid statement", prevCheckedToken(compData->ts));
             //TODO verbose: printf("invalid statement after comma in function body\n");
 
             parsingSuccessfull = false;
@@ -352,12 +348,12 @@ ParseResult parse_statements() {
     }
 
     // check za manjkajoco vejico
-    const Token* nextToken = peekToken(local_ts);
+    const Token* nextToken = peekToken(compData->ts);
     if (nextToken->type != TOKEN_KEYWORD_VAR && nextToken->type != TOKEN_KEYWORD_FUN
         && nextToken->type != TOKEN_KEYWORD_ELSE && nextToken->type != TOKEN_KEYWORD_END
         && nextToken->type != TOKEN_EOF)
     {
-        printSyntaxError(fileName, "possibly missing comma (',') after statement", prevCheckedToken(local_ts));
+        printSyntaxError(compData->inputFileName, "possibly missing comma (',') after statement", prevCheckedToken(compData->ts));
     }
 
     return PR_OK(statementListNode);
@@ -367,7 +363,7 @@ ParseResult parse_individual_statement() {
     if (isEOFNext()) { return PR_EOF; }
 
     // if statement; else block se pogleda v `parse_if_statement`
-    if (checkToken(local_ts, TOKEN_KEYWORD_IF))
+    if (checkToken(compData->ts, TOKEN_KEYWORD_IF))
     {
         const ParseResult parsedIfStatement = parse_if_statement();
         if (parsedIfStatement.status != PS_OK)
@@ -378,7 +374,7 @@ ParseResult parse_individual_statement() {
         return PR_OK(parsedIfStatement.node);
     }
 
-    if (checkToken(local_ts, TOKEN_KEYWORD_WHILE))
+    if (checkToken(compData->ts, TOKEN_KEYWORD_WHILE))
     {
         const ParseResult parsedWhileStatement = parse_while_statement();
         if (parsedWhileStatement.status != PS_OK)
@@ -389,7 +385,7 @@ ParseResult parse_individual_statement() {
         return PR_OK(parsedWhileStatement.node);
     }
 
-    if (checkToken(local_ts, TOKEN_KEYWORD_LET))
+    if (checkToken(compData->ts, TOKEN_KEYWORD_LET))
     {
         const ParseResult parsedLetStatement = parse_let_in_end();
         if (parsedLetStatement.status != PS_OK)
@@ -415,10 +411,10 @@ ParseResult parse_individual_statement() {
 
     appendASTNode(statementNode, loneExpression.node);
 
-    if (checkToken(local_ts, TOKEN_SYMBOL_ASSIGN))
+    if (checkToken(compData->ts, TOKEN_SYMBOL_ASSIGN))
     {
         statementNode->type = AST_STMT_ASSIGN;
-        statementNode->token = prevCheckedToken(local_ts); // expr "=" expr
+        statementNode->token = prevCheckedToken(compData->ts); // expr "=" expr
 
         const ParseResult secondExpression = parse_expression(0);
         if (secondExpression.status != PS_OK)
@@ -436,13 +432,13 @@ ParseResult parse_individual_statement() {
 ParseResult parse_if_statement() {
     if (isEOFNext()) { return PR_EOF; }
 
-    ASTNode* ifNode = newASTNode(AST_STMT_IF, prevCheckedToken(local_ts));
+    ASTNode* ifNode = newASTNode(AST_STMT_IF, prevCheckedToken(compData->ts));
     if (!ifNode) { return PR_ERR_NULL; }
 
     const ParseResult ifExpression = parse_expression(0);
     if (ifExpression.status != PS_OK)
     {
-        printSyntaxError(fileName, "invalid expression", prevCheckedToken(local_ts));
+        printSyntaxError(compData->inputFileName, "invalid expression", prevCheckedToken(compData->ts));
         //TODO verbose: printf("incorrect expression after if\n");
 
         parsingSuccessfull = false;
@@ -450,9 +446,9 @@ ParseResult parse_if_statement() {
         return PR_ERR_NULL;
     }
 
-    if (!checkToken(local_ts, TOKEN_KEYWORD_THEN))
+    if (!checkToken(compData->ts, TOKEN_KEYWORD_THEN))
     {
-        printSyntaxError(fileName, "invalid statement", prevCheckedToken(local_ts));
+        printSyntaxError(compData->inputFileName, "invalid statement", prevCheckedToken(compData->ts));
         //TODO verbose: printf("missing `then` keyword in if statement\n");
 
         parsingSuccessfull = false;
@@ -473,7 +469,7 @@ ParseResult parse_if_statement() {
     appendASTNode(ifNode, ifExpression.node);
     appendASTNode(ifNode, ifStatements.node);
 
-    if (checkToken(local_ts, TOKEN_KEYWORD_ELSE))
+    if (checkToken(compData->ts, TOKEN_KEYWORD_ELSE))
     {
         ifNode->type = AST_STMT_IF_ELSE;
         const ParseResult elseStatements = parse_statements();
@@ -488,7 +484,7 @@ ParseResult parse_if_statement() {
         appendASTNode(ifNode, elseStatements.node);
     }
 
-    if (!checkToken(local_ts, TOKEN_KEYWORD_END))
+    if (!checkToken(compData->ts, TOKEN_KEYWORD_END))
     {
         //TODO verbose: mogoce?? printf("missing `end` keyword in if statement\n");
         parsingSuccessfull = false;
@@ -502,7 +498,7 @@ ParseResult parse_if_statement() {
 ParseResult parse_while_statement() {
     if (isEOFNext()) { return PR_EOF; }
 
-    ASTNode* whileStatementNode = newASTNode(AST_STMT_WHILE, prevCheckedToken(local_ts));
+    ASTNode* whileStatementNode = newASTNode(AST_STMT_WHILE, prevCheckedToken(compData->ts));
     if (!whileStatementNode) { return PR_ERR_NULL; }
 
     const ParseResult whileExpression = parse_expression(0);
@@ -516,7 +512,7 @@ ParseResult parse_while_statement() {
 
     appendASTNode(whileStatementNode, whileExpression.node);
 
-    if (!checkToken(local_ts, TOKEN_KEYWORD_DO))
+    if (!checkToken(compData->ts, TOKEN_KEYWORD_DO))
     {
         //TODO  verbose: mogoce?? printf("missing `do` keyword in while\n");
         parsingSuccessfull = false;
@@ -535,7 +531,7 @@ ParseResult parse_while_statement() {
 
     appendASTNode(whileStatementNode, whileStatements.node);
 
-    if (!checkToken(local_ts, TOKEN_KEYWORD_END))
+    if (!checkToken(compData->ts, TOKEN_KEYWORD_END))
     {
         //TODO  verbose: mogoce?? printf("missing `end` keyword in while\n");
         parsingSuccessfull = false;
@@ -575,7 +571,7 @@ ParseResult parse_let_in_end() {
 
     appendASTNode(letInEndNode, definitionsNode);
 
-    if (!checkToken(local_ts, TOKEN_KEYWORD_IN))
+    if (!checkToken(compData->ts, TOKEN_KEYWORD_IN))
     {
         //TODO  verbose: mogoce?? printf("missing `in` keyword in let (definition)+ in statements end\n");
 
@@ -596,7 +592,7 @@ ParseResult parse_let_in_end() {
 
     appendASTNode(letInEndNode, statements.node);
 
-    if (!checkToken(local_ts, TOKEN_KEYWORD_END))
+    if (!checkToken(compData->ts, TOKEN_KEYWORD_END))
     {
         //TODO  verbose: mogoce?? printf("missing `end` keyword in let (definition)+ in statements end\n");
 
@@ -611,7 +607,7 @@ ParseResult parse_let_in_end() {
 ParseResult parse_expression(const int precedence) {
     if (isEOFNext()) { return PR_EOF; }
 
-    Token* token = peekToken(local_ts);
+    Token* token = peekToken(compData->ts);
 
     ASTNode* lhs = NULL;
 
@@ -623,11 +619,11 @@ ParseResult parse_expression(const int precedence) {
         case TOKEN_SYMBOL_ARITHMETIC_PLUS:
         case TOKEN_SYMBOL_ARITHMETIC_MINUS:
         case TOKEN_SYMBOL_LOGICAL_NOT: {
-            token = consumeToken(local_ts);
+            token = consumeToken(compData->ts);
             const ParseResult rhs = parse_expression(getPrecedence(token->type, true));
             if (rhs.status != PS_OK)
             {
-                printSyntaxError(fileName, "invalid expression", prevCheckedToken(local_ts));
+                printSyntaxError(compData->inputFileName, "invalid expression", prevCheckedToken(compData->ts));
                 // TODO verbose: incorrect form of prefix expression, --help
 
                 parsingSuccessfull = false;
@@ -641,7 +637,7 @@ ParseResult parse_expression(const int precedence) {
             break;
         }
         case TOKEN_IDENTIFIER: {
-            token = consumeToken(local_ts);
+            token = consumeToken(compData->ts);
 
             lhs = newASTNode(AST_IDENT, token);
             if (!lhs) return PR_ERR_NULL;
@@ -651,7 +647,7 @@ ParseResult parse_expression(const int precedence) {
         case TOKEN_CONSTANT_INT:
         case TOKEN_CONSTANT_CHAR:
         case TOKEN_CONSTANT_STRING: {
-            token = consumeToken(local_ts);
+            token = consumeToken(compData->ts);
             lhs = newASTNode(
                 token->type == TOKEN_CONSTANT_INT ? AST_CONST_INT :
                 token->type == TOKEN_CONSTANT_CHAR ? AST_CONST_CHAR :
@@ -662,12 +658,12 @@ ParseResult parse_expression(const int precedence) {
             break;
         }
         case TOKEN_SYMBOL_LEFT_PAREN: {
-                consumeToken(local_ts); // "("
+                consumeToken(compData->ts); // "("
 
                 // empty () check
-                if (peekToken(local_ts)->type == TOKEN_SYMBOL_RIGHT_PAREN) {
+                if (peekToken(compData->ts)->type == TOKEN_SYMBOL_RIGHT_PAREN) {
                     //TODO verbose: empty parentheses are not allowed
-                    printSyntaxError(fileName, "invalid expression", peekToken(local_ts));
+                    printSyntaxError(compData->inputFileName, "invalid expression", peekToken(compData->ts));
                     parsingSuccessfull = false;
                     return PR_ERR_NULL;
                 }
@@ -678,9 +674,9 @@ ParseResult parse_expression(const int precedence) {
                     return PR_ERR_NULL;
                 }
 
-                if (!checkToken(local_ts, TOKEN_SYMBOL_RIGHT_PAREN)) {
+                if (!checkToken(compData->ts, TOKEN_SYMBOL_RIGHT_PAREN)) {
                     //TODO verbose: missing closing ')'
-                    printSyntaxError(fileName, "invalid expression", peekToken(local_ts));
+                    printSyntaxError(compData->inputFileName, "invalid expression", peekToken(compData->ts));
 
                     parsingSuccessfull = false;
                     return PR_ERR_NULL;
@@ -698,10 +694,10 @@ ParseResult parse_expression(const int precedence) {
     while (true)
     {
         // spremenjeno po INTCONST() napaki
-        if (checkToken(local_ts, TOKEN_SYMBOL_LEFT_PAREN)) {
+        if (checkToken(compData->ts, TOKEN_SYMBOL_LEFT_PAREN)) {
             // edina dovoljena oblika je IDENTIFIER()
             if (lhs->type != AST_IDENT) {
-                printSyntaxError(fileName, "invalid function call", prevCheckedToken(local_ts));
+                printSyntaxError(compData->inputFileName, "invalid function call", prevCheckedToken(compData->ts));
 
                 parsingSuccessfull = false;
                 freeAST(lhs);
@@ -713,11 +709,11 @@ ParseResult parse_expression(const int precedence) {
             if (!argsList) { return PR_ERR_NULL; }
 
             // ce ni takoj zaklepaja parsaj naprej argumente
-            if (peekToken(local_ts)->type != TOKEN_SYMBOL_RIGHT_PAREN) {
+            if (peekToken(compData->ts)->type != TOKEN_SYMBOL_RIGHT_PAREN) {
                 // prvi argument
                 const ParseResult arg = parse_expression(0);
                 if (arg.status != PS_OK) {
-                    printSyntaxError(fileName, "invalid argument in function call", prevCheckedToken(local_ts));
+                    printSyntaxError(compData->inputFileName, "invalid argument in function call", prevCheckedToken(compData->ts));
 
                     parsingSuccessfull = false;
                     freeAST(lhs);
@@ -726,11 +722,11 @@ ParseResult parse_expression(const int precedence) {
                 appendASTNode(argsList, arg.node);
 
                 // naslednji argumenti
-                while (checkToken(local_ts, TOKEN_SYMBOL_COMMA)) {
+                while (checkToken(compData->ts, TOKEN_SYMBOL_COMMA)) {
                     const ParseResult more = parse_expression(0);
                     if (more.status != PS_OK) {
                         //TODO verbose: mogoce spodnji msg samo v verbose
-                        printSyntaxError(fileName, "invalid argument after comma", prevCheckedToken(local_ts));
+                        printSyntaxError(compData->inputFileName, "invalid argument after comma", prevCheckedToken(compData->ts));
 
                         parsingSuccessfull = false;
                         freeAST(argsList);
@@ -742,10 +738,10 @@ ParseResult parse_expression(const int precedence) {
             }
 
             // nujen je zaklepaj od function call-a
-            if (!checkToken(local_ts, TOKEN_SYMBOL_RIGHT_PAREN)) {
+            if (!checkToken(compData->ts, TOKEN_SYMBOL_RIGHT_PAREN)) {
                 //TODO --verbose: possibly missing ")" / incorrect arguments
                 // testiraj z fun i(ena)= ime = ena(1==1=2)
-                printSyntaxError(fileName, "invalid function call", prevCheckedToken(local_ts));
+                printSyntaxError(compData->inputFileName, "invalid function call", prevCheckedToken(compData->ts));
 
                 parsingSuccessfull = false;
                 freeAST(argsList);
@@ -766,12 +762,12 @@ ParseResult parse_expression(const int precedence) {
             continue;
         }
 
-        Token* operator = peekToken(local_ts);
+        Token* operator = peekToken(compData->ts);
 
         const int opPrecedence = getPrecedence(operator->type, false);
         if (opPrecedence <= precedence) { break; }
 
-        operator = consumeToken(local_ts);
+        operator = consumeToken(compData->ts);
 
         ASTNode* node = NULL;
 
@@ -836,13 +832,13 @@ ParseResult parse_initializers() {
         return PR_ERR_NULL;
     }
 
-    while (checkToken(local_ts, TOKEN_SYMBOL_COMMA))
+    while (checkToken(compData->ts, TOKEN_SYMBOL_COMMA))
     {
         const ParseResult res = parse_individual_initializer(false);
 
         if (res.status != PS_OK)
         {
-            printSyntaxError(fileName, "invalid initializer(s)", prevCheckedToken(local_ts));
+            printSyntaxError(compData->inputFileName, "invalid initializer(s)", prevCheckedToken(compData->ts));
 
             parsingSuccessfull = false;
             freeAST(initsList);
@@ -877,20 +873,20 @@ ParseResult parse_individual_initializer(const bool isFirstInitializer) {
     }
 
     // opcijsko: INTCONST * const
-    if (checkToken(local_ts, TOKEN_SYMBOL_ARITHMETIC_MULTIPLY)) {
+    if (checkToken(compData->ts, TOKEN_SYMBOL_ARITHMETIC_MULTIPLY)) {
 
         if (!( left.node->type == AST_CONST_INT
             || (left.node->type == AST_EXPR_PREFIX && left.node->children[0]->type == AST_CONST_INT) ))
         {
             //TODO verbose: printf("incorrect initializer; allowed: (INTCONST *)? const\n");
-            printSyntaxError(fileName, "invalid initializer", prevCheckedToken(local_ts));
+            printSyntaxError(compData->inputFileName, "invalid initializer", prevCheckedToken(compData->ts));
 
             parsingSuccessfull = false;
             freeAST(left.node);
             return PR_ERR_NULL;
         }
 
-        ASTNode* mul = newASTNode(AST_EXPR_BINARY, prevCheckedToken(local_ts));
+        ASTNode* mul = newASTNode(AST_EXPR_BINARY, prevCheckedToken(compData->ts));
         if (!mul) { return PR_ERR_NULL; }
 
         appendASTNode(mul, left.node);
@@ -911,17 +907,17 @@ ParseResult parse_constant() {
     if (isEOFNext()) { return PR_EOF; }
 
     // peek za predznak
-    Token* tok = peekToken(local_ts);
+    Token* tok = peekToken(compData->ts);
     bool isSigned = false;
     Token* signTok   = NULL;
 
     if (tok->type == TOKEN_SYMBOL_ARITHMETIC_PLUS || tok->type == TOKEN_SYMBOL_ARITHMETIC_MINUS)
     {
         isSigned = true;
-        signTok  = consumeToken(local_ts);
+        signTok  = consumeToken(compData->ts);
         if (isEOFNext()) {
             //TODO verbose: printf("lone sign as constant in invalid\n");
-            printSyntaxError(fileName, "invalid constant", prevCheckedToken(local_ts));
+            printSyntaxError(compData->inputFileName, "invalid constant", prevCheckedToken(compData->ts));
 
             parsingSuccessfull = false;
             return PR_ERR_NULL;
@@ -929,12 +925,12 @@ ParseResult parse_constant() {
     }
 
     // peek za dejanski const token
-    tok = peekToken(local_ts);
+    tok = peekToken(compData->ts);
     ASTNode* constNode = NULL;
 
     switch (tok->type) {
       case TOKEN_CONSTANT_INT:
-        consumeToken(local_ts);
+        consumeToken(compData->ts);
         constNode = newASTNode(AST_CONST_INT, tok);
         if (!constNode) { return PR_ERR_NULL; }
 
@@ -944,13 +940,13 @@ ParseResult parse_constant() {
       case TOKEN_CONSTANT_STRING:
         // stringi in chari niso predznaceni
         if (isSigned) {
-            printSyntaxError(fileName, "invalid constant", prevCheckedToken(local_ts));
+            printSyntaxError(compData->inputFileName, "invalid constant", prevCheckedToken(compData->ts));
             //TODO verbose; printf("invalid constant. char and string constants cannot be signed\n");
 
             parsingSuccessfull = false;
             return PR_ERR_NULL;
         }
-        tok = consumeToken(local_ts);
+        tok = consumeToken(compData->ts);
         constNode = newASTNode(tok->type == TOKEN_CONSTANT_CHAR ? AST_CONST_CHAR : AST_CONST_STRING, tok);
         if (!constNode) { return PR_ERR_NULL; }
 
@@ -1008,7 +1004,7 @@ int getPrecedence(const TokenType type, const bool isPrefix) {
 }
 
 static bool isEOFNext() {
-    return peekToken(local_ts)->type == TOKEN_EOF;
+    return peekToken(compData->ts)->type == TOKEN_EOF;
 }
 
 bool passedSyntaxAnalysis() {
