@@ -7,7 +7,7 @@
 
 #include "../include/compiler_data.h"
 
-CompilerData* createCompilerData() {
+CompilerData* createCompilerData(void) {
     CompilerData* comp = (CompilerData*) malloc(sizeof(CompilerData));
     if (!comp)
     {

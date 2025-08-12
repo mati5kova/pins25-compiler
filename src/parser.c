@@ -15,7 +15,7 @@
 #define PR_EOF (ParseResult){ .status = PS_EOF, .node = NULL }
 
 // funkcija vrne true | false glede na to ali je naslednji token == TOKEN_EOF (peekToken)
-static bool isEOFNext();
+static bool isEOFNext(void);
 
 bool parsingSuccessfull = true;
 
@@ -34,13 +34,13 @@ ASTNode* parse(CompilerData* compDataIn) {
     return NULL;
 }
 
-ParseResult parse_program() {
+ParseResult parse_program(void) {
     if (isEOFNext()) { return PR_EOF; }
 
     ASTNode* root = newASTNode(AST_ROOT, NULL);
     if (!root) { return PR_ERR_NULL; }
 
-    const ParseResult parsedDefinitions = parse_definitions(false);
+    const ParseResult parsedDefinitions = parse_definitions();
 
     if (parsedDefinitions.status != PS_OK)
     {
@@ -62,7 +62,7 @@ ParseResult parse_program() {
     return PR_OK(root);
 }
 
-ParseResult parse_definitions(const bool expectNonDefinitionTokensToFollow) {
+ParseResult parse_definitions(void) {
     if (isEOFNext()) { return PR_NO_MATCH; }
 
     ASTNode* definitionsNode = newASTNode(AST_DEF_LIST, NULL);
@@ -122,7 +122,7 @@ ParseResult parse_individual_definition(const bool expectNonDefinitionTokensToFo
     return PR_ERR_NULL;
 }
 
-ParseResult parse_fun_def() {
+ParseResult parse_fun_def(void) {
     if (isEOFNext())
     {
         printSyntaxError(compData->inputFileName, "invalid definition", prevCheckedToken(compData->ts));
@@ -190,7 +190,7 @@ ParseResult parse_fun_def() {
     return PR_OK(funNode);
 }
 
-ParseResult parse_var_def() {
+ParseResult parse_var_def(void) {
     if (isEOFNext())
     {
         printSyntaxError(compData->inputFileName, "invalid definition", prevCheckedToken(compData->ts));
@@ -237,7 +237,7 @@ ParseResult parse_var_def() {
 }
 
 // parametri so optional
-ParseResult parse_parameters() {
+ParseResult parse_parameters(void) {
     if (isEOFNext()) { return PR_EOF; }
 
     // params list node ki ga vracamo
@@ -286,7 +286,7 @@ ParseResult parse_parameters() {
     return PR_OK(paramsList);
 }
 
-ParseResult parse_individual_parameter() {
+ParseResult parse_individual_parameter(void) {
     if (isEOFNext()) { return PR_EOF; }
 
     if (checkToken(compData->ts, TOKEN_IDENTIFIER))
@@ -306,7 +306,7 @@ ParseResult parse_individual_parameter() {
     return PR_ERR_NULL;
 }
 
-ParseResult parse_statements() {
+ParseResult parse_statements(void) {
     if (isEOFNext())
     {
         printSyntaxError(compData->inputFileName, "invalid function statements", prevCheckedToken(compData->ts));
@@ -322,7 +322,7 @@ ParseResult parse_statements() {
     const ParseResult firstStatement = parse_individual_statement();
     if (firstStatement.status != PS_OK)
     {
-        printSyntaxError(compData->inputFileName, "invalid statement", prevCheckedToken(compData->ts));
+        printSyntaxError(compData->inputFileName, "invalid statement", peekToken(compData->ts));
 
         parsingSuccessfull = false;
         freeAST(statementListNode);
@@ -336,7 +336,7 @@ ParseResult parse_statements() {
         const ParseResult stmntAfterComma = parse_individual_statement();
         if (stmntAfterComma.status != PS_OK)
         {
-            printSyntaxError(compData->inputFileName, "invalid statement", prevCheckedToken(compData->ts));
+            printSyntaxError(compData->inputFileName, "invalid statement", peekToken(compData->ts));
             //TODO verbose: printf("invalid statement after comma in function body\n");
 
             parsingSuccessfull = false;
@@ -351,7 +351,7 @@ ParseResult parse_statements() {
     const Token* nextToken = peekToken(compData->ts);
     if (nextToken->type != TOKEN_KEYWORD_VAR && nextToken->type != TOKEN_KEYWORD_FUN
         && nextToken->type != TOKEN_KEYWORD_ELSE && nextToken->type != TOKEN_KEYWORD_END
-        && nextToken->type != TOKEN_EOF)
+        && nextToken->type != TOKEN_KEYWORD_IN && nextToken->type != TOKEN_EOF)
     {
         printSyntaxError(compData->inputFileName, "possibly missing comma (',') after statement", prevCheckedToken(compData->ts));
     }
@@ -359,7 +359,7 @@ ParseResult parse_statements() {
     return PR_OK(statementListNode);
 }
 
-ParseResult parse_individual_statement() {
+ParseResult parse_individual_statement(void) {
     if (isEOFNext()) { return PR_EOF; }
 
     // if statement; else block se pogleda v `parse_if_statement`
@@ -429,7 +429,7 @@ ParseResult parse_individual_statement() {
     return PR_OK(statementNode);
 }
 
-ParseResult parse_if_statement() {
+ParseResult parse_if_statement(void) {
     if (isEOFNext()) { return PR_EOF; }
 
     ASTNode* ifNode = newASTNode(AST_STMT_IF, prevCheckedToken(compData->ts));
@@ -495,7 +495,7 @@ ParseResult parse_if_statement() {
     return PR_OK(ifNode);
 }
 
-ParseResult parse_while_statement() {
+ParseResult parse_while_statement(void) {
     if (isEOFNext()) { return PR_EOF; }
 
     ASTNode* whileStatementNode = newASTNode(AST_STMT_WHILE, prevCheckedToken(compData->ts));
@@ -542,7 +542,7 @@ ParseResult parse_while_statement() {
     return PR_OK(whileStatementNode);
 }
 
-ParseResult parse_let_in_end() {
+ParseResult parse_let_in_end(void) {
     if (isEOFNext()) { return PR_EOF; }
 
     ASTNode* letInEndNode = newASTNode(AST_STMT_LET, NULL);
@@ -812,7 +812,7 @@ ParseResult parse_expression(const int precedence) {
     return PR_OK(lhs);
 }
 
-ParseResult parse_initializers() {
+ParseResult parse_initializers(void) {
     // ni EOF checka ker je lahko zadnja vrstica `var ime = ` in je valid
 
     // initializer list node ki ga vracamo
@@ -903,7 +903,7 @@ ParseResult parse_individual_initializer(const bool isFirstInitializer) {
     return PR_OK(left.node);
 }
 
-ParseResult parse_constant() {
+ParseResult parse_constant(void) {
     if (isEOFNext()) { return PR_EOF; }
 
     // peek za predznak
@@ -1003,10 +1003,10 @@ int getPrecedence(const TokenType type, const bool isPrefix) {
     }
 }
 
-static bool isEOFNext() {
+static bool isEOFNext(void) {
     return peekToken(compData->ts)->type == TOKEN_EOF;
 }
 
-bool passedSyntaxAnalysis() {
+bool passedSyntaxAnalysis(void) {
     return parsingSuccessfull;
 }

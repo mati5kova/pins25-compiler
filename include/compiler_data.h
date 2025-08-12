@@ -31,7 +31,7 @@ typedef struct CompilerData{
 } CompilerData;
 
 // ustvari struct in ga vrne (v main), nastavi defaultne vrednosti
-CompilerData* createCompilerData();
+CompilerData* createCompilerData(void);
 
 // cleanup vseh podatkov ki jih drzi
 void destroyCompilerData(CompilerData* comp);

@@ -3,6 +3,10 @@ project(pins25_compiler C)
 
 set(CMAKE_C_STANDARD 99)
 
+if (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Wall -Wextra -pedantic)
+endif()
+
 add_executable(pins25_compiler src/main.c
         include/lexer.h
         src/lexer.c
