@@ -9,7 +9,6 @@
 
 #define INITIAL_ASTNODE_CHILD_COUNT 4
 
-
 ASTNode* newASTNode(const ASTNodeType type, Token* token) {
 
     ASTNode* node = malloc(sizeof(ASTNode));

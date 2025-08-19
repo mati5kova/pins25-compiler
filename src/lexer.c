@@ -163,7 +163,7 @@ Token** tokenize(CompilerData* compData) {
             }
 
             // beremo dokler so stevke
-            while (isdigit((compData->source)[pos]) && (compData->source)[pos] != '\0' && (compData->source)[pos] != '\n' && (compData->source)[pos] != EOF) {
+            while (isdigit((compData->source)[pos]) && (compData->source)[pos] != '\0' && (compData->source)[pos] != '\n') {
                 number = number * 10 + ((compData->source)[pos] - '0');
                 lexemLength++;
                 incPosition(&pos, &col);

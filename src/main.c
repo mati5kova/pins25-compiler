@@ -7,6 +7,8 @@
 #include "../include/parser.h"
 #include "../include/ast.h"
 
+// da je izpis kot npr. parsing failed izpise vedno na dnu v rdeci
+#define ERROR_STDOUT(msg) fprintf(stdout, "%s%s%s\n", "\x1b[31m", msg, "\x1b[0m");
 
 int main(const int argc, char* argv[]) {
     CompilerData* compData = createCompilerData();
@@ -53,7 +55,7 @@ int main(const int argc, char* argv[]) {
 
         if (!(compData->lexOK)) // leksikalna analiza ni bila uspesna
         {
-            fprintf(stderr, "Lexing failed");
+            ERROR_STDOUT("Lexing failed");
             goto cleanup;
         }
 
@@ -69,7 +71,7 @@ int main(const int argc, char* argv[]) {
     {
         compData->ts = createTokenStream(compData->tokens, compData->tokenCount);
         if (!(compData->ts)) {
-            fprintf(stderr, "Error creating token stream\n");
+            ERROR_STDOUT("Error creating token stream");
             goto cleanup;
         }
     }
@@ -81,7 +83,7 @@ int main(const int argc, char* argv[]) {
 
         if (!(compData->rootASTNode) || !parsingSuccessfull)
         {
-            fprintf(stderr, "Parsing failed");
+            ERROR_STDOUT("Parsing failed");
             goto cleanup;
         }
 
