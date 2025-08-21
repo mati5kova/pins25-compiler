@@ -22,7 +22,7 @@ void printLexerError(const char* fileName, const char* errorMsg, const int line,
 }
 
 void printVerboseInfo(char* additionalErrorMsg) {
-    fprintf(stdout, "--verbose:\n%s%s%s\n\n", ANSI_COLOR_RED, additionalErrorMsg, ANSI_COLOR_RESET);
+    fprintf(stdout, "verbose: %s%s%s\n\n", ANSI_COLOR_RED, additionalErrorMsg, ANSI_COLOR_RESET);
 }
 
 void printHelp(char* title, char* msg) {

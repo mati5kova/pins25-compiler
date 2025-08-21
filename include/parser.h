@@ -63,4 +63,6 @@ int getPrecedence(TokenType type, bool isPrefix);
 // vrne true | false glede na to ali je bil parsing uspesen
 bool passedSyntaxAnalysis(void);
 
+bool possibleRecovery(int n, const TokenType types[]);
+
 #endif //PARSER_H
