@@ -937,11 +937,13 @@ ParseResult parse_initializers(void) {
         return PR_OK(initsList);
     }
 
-    if (firstInit.status != PS_OK || !appendASTNode(initsList, firstInit.node)) {
+    if (firstInit.status != PS_OK) {
         parsingSuccessfull = false;
         freeAST(initsList);
         return PR_ERR_NULL;
     }
+
+    appendASTNode(initsList, firstInit.node);
 
     while (checkToken(compData->ts, TOKEN_SYMBOL_COMMA))
     {
@@ -1009,6 +1011,8 @@ ParseResult parse_individual_initializer(const bool isFirstInitializer) {
         }
         appendASTNode(mul, right.node);
         return PR_OK(mul);
+    } else
+    {
     }
 
     return PR_OK(left.node);
@@ -1020,7 +1024,7 @@ ParseResult parse_constant(void) {
     // peek za predznak
     Token* tok = peekToken(compData->ts);
     bool isSigned = false;
-    Token* signTok   = NULL;
+    Token* signTok = NULL;
 
     if (tok->type == TOKEN_SYMBOL_ARITHMETIC_PLUS || tok->type == TOKEN_SYMBOL_ARITHMETIC_MINUS)
     {
