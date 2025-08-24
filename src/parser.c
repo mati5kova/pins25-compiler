@@ -6,8 +6,8 @@
 
 #include "../include/parser.h"
 #include "../include/ast.h"
-#include "../include/token_stream.h"
 #include "../include/error_utils.h"
+#include "../include/compiler_data.h"
 
 #define PR_OK(ret_node) (ParseResult){ .status = PS_OK, .node = ret_node }
 #define PR_ERR_NULL (ParseResult){ .status = PS_ERROR, .node = NULL }

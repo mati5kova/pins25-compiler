@@ -3,9 +3,9 @@
 //
 
 #include <stdio.h>
-#include <stdlib.h>
 #include "../include/ast.h"
 #include "../include/lexer.h"
+#include "../include/semantic.h"
 
 #define INITIAL_ASTNODE_CHILD_COUNT 4
 
@@ -29,6 +29,17 @@ ASTNode* newASTNode(const ASTNodeType type, Token* token) {
 
     node->childCount = 0;
     node->maxChildCount = INITIAL_ASTNODE_CHILD_COUNT;
+
+    node->semInfo = malloc(sizeof(SemInfo));
+    if (!node->semInfo)
+    {
+        free(node->children);
+        free(node);
+        return NULL;
+    }
+    node->semInfo->arity = 0;
+    node->semInfo->is_const_init = false;
+    node->semInfo->is_lvalue = false;
 
     return node;
 }

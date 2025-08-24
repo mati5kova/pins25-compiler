@@ -5,7 +5,10 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include "./ast.h"
+#include <stdbool.h>
+#include "token.h"
+#include "ast.h"
+#include "compiler_data.h"
 
 // PS...parse status
 typedef enum {

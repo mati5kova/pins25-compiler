@@ -13,15 +13,13 @@
 #include "./token.h"
 #include "./ast.h"
 
-struct ASTNode; // forward declaration
-
 typedef struct CompilerData{
     FILE*           inputFile;
     char*           inputFileName;
     Options         opts;
     Token**         tokens;
     TokenStream*    ts;
-    struct ASTNode* rootASTNode;
+    ASTNode*        rootASTNode;
 
     // LEXER
     char*           source;         // buffer z vsebino vhodne datoteke

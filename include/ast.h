@@ -6,7 +6,7 @@
 #define AST_H
 
 #include <stdbool.h>
-#include "./lexer.h"
+#include "token.h"
 
 typedef enum {
     AST_ROOT,           // root
@@ -46,10 +46,11 @@ typedef enum {
 
 typedef struct ASTNode {
     ASTNodeType      type;
-    Token*           token;           // samo  za liste drevesa
+    Token*           token;           // samo  za liste drevesa + var in fun head node
     size_t           childCount;
     size_t           maxChildCount;
     struct ASTNode** children;
+    struct SemInfo*  semInfo;
 } ASTNode;
 
 ASTNode* newASTNode(ASTNodeType type, Token* token);

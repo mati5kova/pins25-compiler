@@ -23,4 +23,6 @@ add_executable(pins25_compiler src/main.c
         include/compiler_data.h
         src/compiler_data.c
         include/token.h
+        src/semantic.c
+        include/semantic.h
 )

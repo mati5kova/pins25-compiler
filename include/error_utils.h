@@ -5,7 +5,7 @@
 #ifndef ERROR_UTILS_H
 #define ERROR_UTILS_H
 
-#include "lexer.h"
+#include "token.h"
 
 // funkcija za enotni izpis napak
 void printLexerError(const char* fileName, const char* errorMsg, int line, int column, int position, const char* lexemStart, int length);
